@@ -345,9 +345,9 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
     } catch (t: Throwable) { "0" }
     var showNoPriv by remember { mutableStateOf(false) }
     var hasShellPriv by remember { mutableStateOf(Priv.cachedOk()) }
-    var privChecked by remember { mutableStateOf(false) }
+
     var privDetail by remember { mutableStateOf("") }
-    var privTick by remember { mutableStateOf(0) }
+
     var showFirstRun by remember { mutableStateOf(false) }
     var showImages by remember { mutableStateOf(false) }
     var imgCount by remember { mutableStateOf(ImageStore.count(ctx)) }
@@ -416,16 +416,19 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
         }.start()
     }
 
-    // 后台探测一次权限；每 400ms 看结果是否回来了
-    LaunchedEffect(canOverlay, showPerm, privTick) {
-        try { Priv.refreshAsync(ctx) } catch (t: Throwable) { }
-        repeat(10) {
-            delay(400)
-            hasShellPriv = Priv.cachedOk()
+    // 常驻探测：每 2 秒看一次。Shizuku 授权后 authorized() 立刻变 true，
+    // 不必等 rish 那条慢通道，界面能马上从灰变亮。
+    LaunchedEffect(Unit) {
+        while (true) {
+            val authorized = try { ShizukuHelper.authorized() } catch (t: Throwable) { false }
+            val rootFast = hasShellPriv
+            hasShellPriv = authorized || rootFast || Priv.cachedOk()
+            if (!hasShellPriv) {
+                try { Priv.refreshAsync(ctx) } catch (t: Throwable) { }
+            }
             privDetail = Priv.detail()
-            if (hasShellPriv) return@LaunchedEffect
+            delay(2000)
         }
-        privChecked = true
     }
 
     Scaffold { pad ->
@@ -478,7 +481,7 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
             Spacer(Modifier.height(12.dp))
 
             // 一个普通开关：有 root / ADB 时正常可用，否则灰掉、点了弹「当前权限无法调用」
-            val skipUsable = privChecked && hasShellPriv
+            val skipUsable = hasShellPriv
             Card(insideMargin = PaddingValues(0.dp)) {
                 Box {
                     androidx.compose.foundation.layout.Box(
@@ -938,7 +941,7 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("5.2") })
+                    BasicComponent(title = "版本", endActions = { Text("5.3") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
