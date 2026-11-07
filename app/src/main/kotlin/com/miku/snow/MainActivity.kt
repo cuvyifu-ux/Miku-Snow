@@ -108,16 +108,14 @@ class MainActivity : ComponentActivity() {
         // Shizuku 的接口权限改成「用户点授权时才申请」，启动时不再自动弹窗，
         // 否则每次回前台都会跳一次系统授权框。
 
-        try {
-            ShizukuHelper.init(this)
-        } catch (t: Throwable) {
-            // Shizuku 没装 / binder 不通时不要连累主界面
-        }
-        try {
-            // provider 的 onCreate 不一定被拉起，这里主动要一次 binder，
-            // 否则已经授权了也 pingBinder=false，界面一直灰着
-            ShizukuHelper.requestBinder(this)
-        } catch (t: Throwable) {
+        // 用户没在「悬浮窗权限」里手动选过 Shizuku，就完全不碰它，
+        // 免得用 root 的人每次进应用都被 Shizuku 的授权框拦住。
+        if (Prefs.shizukuOptIn(this)) {
+            try {
+                ShizukuHelper.init(this)
+                ShizukuHelper.requestBinder(this)
+            } catch (t: Throwable) {
+            }
         }
         try {
             Prefs.ensureAdbScript(this)
@@ -175,10 +173,12 @@ class MainActivity : ComponentActivity() {
             }
         } catch (t: Throwable) {
         }
-        try {
-            ShizukuHelper.init(this)
-            ShizukuHelper.requestBinder(this)
-        } catch (t: Throwable) {
+        if (Prefs.shizukuOptIn(this)) {
+            try {
+                ShizukuHelper.init(this)
+                ShizukuHelper.requestBinder(this)
+            } catch (t: Throwable) {
+            }
         }
         Thread {
             try {
@@ -716,7 +716,9 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     LaunchedEffect(Unit) {
         while (true) {
             // 不再自动索取 binder：Shizuku 的授权框由用户点「授权」时手动触发一次
-            val authorized = try { ShizukuHelper.authorized() } catch (t: Throwable) { false }
+            val authorized = if (Prefs.shizukuOptIn(ctx)) {
+                try { ShizukuHelper.authorized() } catch (t: Throwable) { false }
+            } else false
             val rootFast = hasShellPriv
             hasShellPriv = authorized || rootFast || Priv.cachedOk()
             if (!hasShellPriv) {
@@ -1236,6 +1238,8 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                     if (RootHelper.available()) {
                         Priv.markOk(ctx, "root 可用")
                         hasShellPriv = true
+                        // 选了 root 就不再用 Shizuku：把开关关掉，后续不再向它申请
+                        Prefs.setShizukuOptIn(ctx, false)
                     }
                     toast(ctx, if (Settings.canDrawOverlays(ctx)) "已授权" else "命令已执行，见诊断")
                 }
@@ -1493,7 +1497,9 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DlgButton("继续", Modifier.weight(1f), primary = true) {
                     confirmShizuku = false
+                    Prefs.setShizukuOptIn(ctx, true)
                     try {
+                        ShizukuHelper.init(ctx)
                         if (!ShizukuHelper.apiPermissionGranted(ctx)) {
                             (ctx as? android.app.Activity)?.requestPermissions(
                                 arrayOf("moe.shizuku.manager.permission.API_V23"), 2001
@@ -1831,7 +1837,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.8") })
+                    BasicComponent(title = "版本", endActions = { Text("7.9") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",

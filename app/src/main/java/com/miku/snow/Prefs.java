@@ -128,6 +128,15 @@ public final class Prefs {
         sp(c).edit().putBoolean("no_text", v).apply();
     }
 
+    /** 用户是否主动选择用 Shizuku（没选过就完全不碰它，避免乱弹授权） */
+    public static boolean shizukuOptIn(Context c) {
+        return sp(c).getBoolean("shizuku_opt_in", false);
+    }
+
+    public static void setShizukuOptIn(Context c, boolean v) {
+        sp(c).edit().putBoolean("shizuku_opt_in", v).apply();
+    }
+
     /** 已读过更新日志的最高版本号 */
     public static int seenLog(Context c) {
         return sp(c).getInt("seen_log", 0);

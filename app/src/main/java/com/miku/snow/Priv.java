@@ -71,7 +71,7 @@ public final class Priv {
 
                 int uid = -1;
                 try {
-                    if (ShizukuHelper.authorized()) {
+                    if (Prefs.shizukuOptIn(app) && ShizukuHelper.authorized()) {
                         uid = ShizukuHelper.shellUid();
                         shz = uid == 2000 ? "已授权（shell）" : ("已授权（uid " + uid + "）");
                     }
