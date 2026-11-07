@@ -39,6 +39,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -501,6 +503,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     // 关于页里做返回手势 → 回主页，别直接退出应用
     // 预测性返回：手势过程中页面跟手位移，松手完成才回主页
     var backProgress by remember { mutableStateOf(0f) }
+    val backScope = rememberCoroutineScope()
     val screenW = with(LocalDensity.current) {
         LocalConfiguration.current.screenWidthDp.dp.toPx()
     }
@@ -511,8 +514,12 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
             backProgress = 0f
             throw c
         }
-        backProgress = 0f
-        page = 0
+        backScope.launch {
+            backProgress = 1f
+            kotlinx.coroutines.delay(50)
+            page = 0
+            backProgress = 0f
+        }
     }
 
     val currentVersion = try {
@@ -1454,8 +1461,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
         visible = page == 2,
         enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) +
                 androidx.compose.animation.fadeIn(),
-        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) +
-                androidx.compose.animation.fadeOut()
+        exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(120))
     ) {
         run {
             var seg by remember { mutableStateOf(if (themeMode == 3) 0 else themeMode) }
@@ -1582,8 +1588,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
         visible = page == 1,
         enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) +
                 androidx.compose.animation.fadeIn(),
-        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) +
-                androidx.compose.animation.fadeOut()
+        exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(120))
     ) {
     run {
         var checkMsg by remember { mutableStateOf("") }
@@ -1673,7 +1678,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("6.8") })
+                    BasicComponent(title = "版本", endActions = { Text("6.9") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
