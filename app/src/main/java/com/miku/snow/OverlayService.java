@@ -47,6 +47,7 @@ public class OverlayService extends Service {
     private boolean layerSecure;        // 只隐藏雪花这一层是否真的生效
     private boolean shellMode;          // 当前是不是 shell 子进程在画雪花
     private boolean skipApplied;        // 当前窗口是不是带「跳过截图」标记的那一层
+    private boolean secureWanted;       // 用户当前想要的防截屏状态（用来判断要不要重建）
     private final android.os.Handler mainHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
     private int screenW = 1080;
@@ -64,7 +65,7 @@ public class OverlayService extends Service {
         @Override
         public void run() {
             try {
-                if (added) {
+                if (added && surfaceView != null) {
                     boolean stale = !drawing
                             || (lastFrameNanos > 0
                             && System.nanoTime() - lastFrameNanos > 6_000_000_000L);
@@ -188,6 +189,7 @@ public class OverlayService extends Service {
             wantSecure = Prefs.secure(this);
         } catch (Throwable ignored) {
         }
+        secureWanted = wantSecure;
         Priv.refreshAsync(this);
         // 实验性通道：不分系统版本都试一次，能不能真的跳过截图因机型而异
         if (wantSecure && Build.VERSION.SDK_INT >= 29 && addSkipScreenshotLayer()) {
@@ -466,7 +468,8 @@ public class OverlayService extends Service {
 
         // 开关变了必须重建窗口：跳过截图的标记是挂在那层 SurfaceControl 上的，
         // 只改偏好不重建，层还带着旧标记，关了开关也照样不进截图。
-        if (wantShell != skipApplied) {
+        if (wantShell != secureWanted) {
+            secureWanted = wantShell;
             removeOverlay();
             try {
                 addOverlay();
