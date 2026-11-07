@@ -37,6 +37,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
@@ -458,7 +463,9 @@ private fun FoldingTitle(
     title: String,
     dark: Boolean,
     onBack: (() -> Unit)? = null,
-    blurEnabled: Boolean = true
+    blurEnabled: Boolean = true,
+    haze: HazeState? = null,
+    modifier: Modifier = Modifier
 ) {
     val frac = (scroll.value / 220f).coerceIn(0f, 1f)
     val bg = if (dark) Color(0xFF000000) else Color(0xFFFFFFFF)
@@ -473,11 +480,24 @@ private fun FoldingTitle(
 
     val height = (96f - frac * 44f).dp
 
+    // 毛玻璃：把从顶栏下面滑过去的页面内容取过来做高斯模糊
+    val glass = if (haze != null) {
+        Modifier.hazeEffect(
+            state = haze,
+            style = HazeStyle(
+                backgroundColor = bg.copy(alpha = 0.72f),
+                tints = emptyList(),
+                blurRadius = 22.dp,
+                noiseFactor = 0.02f
+            )
+        )
+    } else Modifier.background(bg)
+
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(height)
-            .background(bg)
+            .then(glass)
     ) {
         if (onBack != null) {
             Box(
@@ -759,17 +779,22 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     }
 
     val homeScroll = rememberScrollState()
+    val homeHaze = rememberHazeState()
     Scaffold(
-        topBar = { FoldingTitle(homeScroll, "Miku", dark, blurEnabled = blurTitle) }
+        topBar = {}
     ) { pad ->
+        Box(Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(pad)
                 .verticalScroll(homeScroll)
+                .hazeSource(homeHaze)
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 28.dp)
         ) {
+            // 内容从顶栏下方开始，但滚动时会从毛玻璃下面穿过去
+            Spacer(Modifier.height(96.dp))
             WorkingCard(running = running, dark = dark) {
                 if (running) stopOverlay()
                 else if (!canOverlay) showPerm = true
@@ -1093,6 +1118,10 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 }
             }
 
+        }
+        Box(Modifier.fillMaxWidth().padding(top = pad.calculateTopPadding())) {
+            FoldingTitle(homeScroll, "Miku", dark, blurEnabled = blurTitle, haze = homeHaze)
+        }
         }
 
         // 下面这些弹窗必须留在 Scaffold 内容域里，OverlayDialog 依赖它提供的 CompositionLocal
@@ -1612,27 +1641,23 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
             var seg by remember { mutableStateOf(if (themeMode == 3) 0 else themeMode) }
             var localScale by remember { mutableStateOf(Prefs.uiScale(ctx)) }
             val themeScroll = rememberScrollState()
+            val themeHaze = rememberHazeState()
 
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer { translationX = backProgress * screenW }
                     .background(if (dark) Color(0xFF000000) else Color(0xFFFFFFFF))
             ) {
-                FoldingTitle(
-                    scroll = themeScroll,
-                    title = "主题",
-                    dark = dark,
-                    onBack = { page = 0 },
-                    blurEnabled = blurTitle
-                )
                 Column(
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxSize()
                         .verticalScroll(themeScroll)
+                        .hazeSource(themeHaze)
                         .padding(horizontal = 16.dp)
                         .padding(top = 12.dp, bottom = 28.dp)
                 ) {
+                    Spacer(Modifier.height(96.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("跟随系统", "浅色", "深色").forEachIndexed { idx, name ->
                             val on = seg == idx && themeMode != 3
@@ -1724,6 +1749,14 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                     Spacer(Modifier.height(20.dp))
                     DlgButton("返回", Modifier.fillMaxWidth()) { page = 0 }
                 }
+                FoldingTitle(
+                    scroll = themeScroll,
+                    title = "主题",
+                    dark = dark,
+                    onBack = { page = 0 },
+                    blurEnabled = blurTitle,
+                    haze = themeHaze
+                )
             }
         }
     }
@@ -1762,26 +1795,22 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
         }
 
         val aboutScroll = rememberScrollState()
-        Column(
+        val aboutHaze = rememberHazeState()
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer { translationX = backProgress * screenW }
                 .background(if (dark) Color(0xFF000000) else Color(0xFFFFFFFF))
         ) {
-            FoldingTitle(
-                scroll = aboutScroll,
-                title = "关于",
-                dark = dark,
-                onBack = { page = 0 },
-                blurEnabled = blurTitle
-            )
             Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxSize()
                     .verticalScroll(aboutScroll)
+                    .hazeSource(aboutHaze)
                     .padding(horizontal = 16.dp)
                     .padding(top = 12.dp, bottom = 28.dp)
             ) {
+                Spacer(Modifier.height(96.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(
                         painter = painterResource(R.drawable.app_icon),
@@ -1827,7 +1856,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.11") })
+                    BasicComponent(title = "版本", endActions = { Text("7.12") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
@@ -1890,6 +1919,14 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 DlgButton("返回", Modifier.fillMaxWidth(), primary = true) { page = 0 }
             }
+            FoldingTitle(
+                scroll = aboutScroll,
+                title = "关于",
+                dark = dark,
+                onBack = { page = 0 },
+                blurEnabled = blurTitle,
+                haze = aboutHaze
+            )
         }
     }
     }

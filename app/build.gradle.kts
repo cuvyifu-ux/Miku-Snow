@@ -11,8 +11,8 @@ android {
         applicationId = "com.miku.snow"
         minSdk = 26
         targetSdk = 33
-        versionCode = 72
-        versionName = "7.11"
+        versionCode = 73
+        versionName = "7.12"
     }
 
     buildTypes {
@@ -48,4 +48,5 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.compose.animation:animation:1.12.0")
     implementation(files("libs/shizuku.jar"))
+    implementation("dev.chrisbanes.haze:haze:1.6.10")
 }
