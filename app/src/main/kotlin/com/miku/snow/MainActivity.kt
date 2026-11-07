@@ -507,21 +507,34 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     val screenW = with(LocalDensity.current) {
         LocalConfiguration.current.screenWidthDp.dp.toPx()
     }
-    androidx.activity.compose.PredictiveBackHandler(enabled = page != 0) { progress ->
-        try {
-            progress.collect { ev -> backProgress = ev.progress }
-        } catch (c: kotlinx.coroutines.CancellationException) {
-            backProgress = 0f
-            throw c
+    if (predictBack) {
+        androidx.activity.compose.PredictiveBackHandler(enabled = page != 0) { progress ->
+            try {
+                progress.collect { ev -> backProgress = ev.progress }
+            } catch (c: kotlinx.coroutines.CancellationException) {
+                backProgress = 0f
+                throw c
+            }
+            backScope.launch {
+                // 快速一甩时事件推进很少，这里补一段滑动把页面送出画面
+                var p = backProgress
+                while (p < 1f) {
+                    p = (p + 0.10f).coerceAtMost(1f)
+                    backProgress = p
+                    kotlinx.coroutines.delay(16)
+                }
+                kotlinx.coroutines.delay(30)
+                // 切页时不要立刻把位移清零，否则退场动画会把页面拉回原位闪一下
+                page = 0
+                kotlinx.coroutines.delay(220)
+                backProgress = 0f
+            }
         }
-        backScope.launch {
-            // 先把跟手位移补满整屏，页面已经移出画面
-            backProgress = 1f
-            kotlinx.coroutines.delay(60)
-            // 切页时不要立刻把位移清零，否则退场动画会把页面拉回原位闪一下
-            page = 0
-            kotlinx.coroutines.delay(220)
+    } else {
+        // 关掉预测性返回：退回普通返回，页面不跟手
+        androidx.activity.compose.BackHandler(enabled = page != 0) {
             backProgress = 0f
+            page = 0
         }
     }
 
@@ -1681,7 +1694,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.0") })
+                    BasicComponent(title = "版本", endActions = { Text("7.1") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
