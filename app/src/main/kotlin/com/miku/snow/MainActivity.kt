@@ -1210,23 +1210,13 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
         summary = "SYSTEM_ALERT_WINDOW · 任选一条通道"
     ) {
         Column {
-            // 原来这里在 Composable 里直接调 RishHelper.state(ctx)：那是阻塞的 rish 进程调用，
-            // 每次重组都卡主线程，点「悬浮窗权限」就会僵住。改成先显示占位，再后台查。
-            var permState by remember { mutableStateOf("正在检测 Shizuku…") }
-            LaunchedEffect(Unit) {
-                Thread {
-                    val s = RishHelper.state(ctx)
-                    val e = ShizukuHelper.lastErrorText()
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        permState = "Shizuku：" + s + (if (e.isEmpty()) "" else "\n" + e)
-                    }
-                }.start()
-            }
+            // 打开这个页面不主动去摸 Shizuku：只有你点了「Shizuku 授权」才申请
+            var permState by remember { mutableStateOf("选一条通道授权，不会自动申请") }
             Text(text = permState, fontSize = 12.sp)
             Spacer(Modifier.height(10.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DlgButton("Shizuku 授权", Modifier.weight(1f), primary = true) {
+                DlgButton("Shizuku 授权", Modifier.weight(1f)) {
                     confirmShizuku = true
                 }
                 DlgButton("Root 授权", Modifier.weight(1f)) {
@@ -1837,7 +1827,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.9") })
+                    BasicComponent(title = "版本", endActions = { Text("7.10") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
