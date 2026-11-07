@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -350,6 +351,9 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
     var showFirstRun by remember { mutableStateOf(false) }
     var showImages by remember { mutableStateOf(false) }
     var imgCount by remember { mutableStateOf(ImageStore.count(ctx)) }
+    var imgs by remember { mutableStateOf(ImageStore.files(ctx)) }
+    var imgBusy by remember { mutableStateOf(false) }
+    var imgTick by remember { mutableStateOf(0) }
     var diag by remember { mutableStateOf("") }
 
     val dark = when (themeMode) {
@@ -396,12 +400,20 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
     }
 
     val pickImages = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
+        ActivityResultContracts.PickMultipleVisualMedia(ImageStore.MAX_IMAGES)
     ) { uris: List<Uri> ->
-        val n = ImageStore.importUris(ctx, uris)
-        imgCount = ImageStore.count(ctx)
-        toast(ctx, "已导入 $n 张图片（最多 ${ImageStore.MAX_IMAGES} 张）")
-        push()
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        imgBusy = true
+        Thread {
+            val n = try { ImageStore.importUris(ctx, uris) } catch (t: Throwable) { 0 }
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                imgBusy = false
+                imgCount = ImageStore.count(ctx)
+                imgs = ImageStore.files(ctx)
+                toast(ctx, "已导入 $n 张图片（最多 ${ImageStore.MAX_IMAGES} 张）")
+                push()
+            }
+        }.start()
     }
 
     // 后台探测一次权限；每 400ms 看结果是否回来了
@@ -598,14 +610,19 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                 BasicComponent(
                     title = "导入图片",
                     summary = "从相册 / 文件里选，最多 ${ImageStore.MAX_IMAGES} 张",
-                    onClick = { pickImages.launch("image/*") },
+                    onClick = {
+                        pickImages.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
                     endActions = { Text("选择") }
                 )
                 BasicComponent(
                     title = "管理图片",
                     summary = if (imgCount == 0) "还没有图片" else "已导入 $imgCount 张，可逐张删除",
                     onClick = {
-                        imgCount = ImageStore.count(ctx)
+                        imgs = ImageStore.files(ctx)
+                        imgCount = imgs.size
                         showImages = true
                     },
                     endActions = { Text("管理") }
@@ -669,6 +686,51 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
 
         // 下面这些弹窗必须留在 Scaffold 内容域里，OverlayDialog 依赖它提供的 CompositionLocal
         // 截屏与录屏说明
+    // 管理图片（之前被误删过，这里补回来）
+    if (showImages) MikuDialog(
+        onDismiss = { showImages = false },
+        title = "管理图片",
+        summary = "最多 ${ImageStore.MAX_IMAGES} 张，按文件名顺序飘"
+    ) {
+        Column {
+            if (imgBusy) {
+                Text(text = "正在导入…", fontSize = 13.sp)
+            }
+            if (imgs.isEmpty()) {
+                Text(text = "还没有图片", fontSize = 13.sp)
+            } else {
+                imgs.forEachIndexed { idx, f ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${idx + 1}. " + f.name,
+                            fontSize = 13.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        DlgButton("删除") {
+                            ImageStore.delete(ctx, f.name)
+                            imgs = ImageStore.files(ctx)
+                            imgCount = imgs.size
+                            imgTick++
+                            push()
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DlgButton("添加图片", Modifier.weight(1f), primary = true) {
+                    showImages = false
+                    pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+                DlgButton("关闭", Modifier.weight(1f)) { showImages = false }
+            }
+        }
+    }
+
     // 没有 root / ADB 时的提示
     if (showNoPriv) MikuDialog(
         onDismiss = { showNoPriv = false },
@@ -876,7 +938,7 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("5.1") })
+                    BasicComponent(title = "版本", endActions = { Text("5.2") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
