@@ -128,6 +128,15 @@ public final class Prefs {
         sp(c).edit().putBoolean("no_text", v).apply();
     }
 
+    /** 是否已在 root 下解除隐藏 API 限制（解除后需要重启应用才生效） */
+    public static boolean hiddenUnlocked(Context c) {
+        return sp(c).getBoolean("hidden_unlocked", false);
+    }
+
+    public static void setHiddenUnlocked(Context c, boolean v) {
+        sp(c).edit().putBoolean("hidden_unlocked", v).apply();
+    }
+
     /** 标题模糊：折叠标题用模糊消散/凝聚的方式过渡 */
     public static boolean blurTitle(Context c) {
         return sp(c).getBoolean("blur_title", true);
