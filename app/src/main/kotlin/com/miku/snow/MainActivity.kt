@@ -45,6 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
@@ -690,7 +694,26 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
         // 下面这些弹窗必须留在 Scaffold 内容域里，OverlayDialog 依赖它提供的 CompositionLocal
         // 截屏与录屏说明
     // 管理图片（之前被误删过，这里补回来）
-    if (showImages) MikuDialog(
+    if (showImages) {
+        val thumbs = remember { mutableStateMapOf<String, androidx.compose.ui.graphics.ImageBitmap>() }
+        LaunchedEffect(imgs) {
+            val list = imgs
+            Thread {
+                list.forEach { f ->
+                    try {
+                        val bmp = android.graphics.BitmapFactory.decodeFile(f.absolutePath)
+                        if (bmp != null) {
+                            val img = bmp.asImageBitmap()
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                thumbs[f.name] = img
+                            }
+                        }
+                    } catch (t: Throwable) {
+                    }
+                }
+            }.start()
+        }
+        MikuDialog(
         onDismiss = { showImages = false },
         title = "管理图片",
         summary = "最多 ${ImageStore.MAX_IMAGES} 张，按文件名顺序飘"
@@ -707,6 +730,25 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val thumb = thumbs[f.name]
+                        if (thumb != null) {
+                            Image(
+                                bitmap = thumb,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (dark) Color(0xFF2A2A2A) else Color(0xFFEDEDED))
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
                         Text(
                             text = "${idx + 1}. " + f.name,
                             fontSize = 13.sp,
@@ -731,6 +773,7 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                 }
                 DlgButton("关闭", Modifier.weight(1f)) { showImages = false }
             }
+        }
         }
     }
 
@@ -941,7 +984,7 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("5.3") })
+                    BasicComponent(title = "版本", endActions = { Text("5.4") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
