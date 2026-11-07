@@ -515,9 +515,12 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
             throw c
         }
         backScope.launch {
+            // 先把跟手位移补满整屏，页面已经移出画面
             backProgress = 1f
-            kotlinx.coroutines.delay(50)
+            kotlinx.coroutines.delay(60)
+            // 切页时不要立刻把位移清零，否则退场动画会把页面拉回原位闪一下
             page = 0
+            kotlinx.coroutines.delay(220)
             backProgress = 0f
         }
     }
@@ -1678,7 +1681,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("6.9") })
+                    BasicComponent(title = "版本", endActions = { Text("7.0") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
