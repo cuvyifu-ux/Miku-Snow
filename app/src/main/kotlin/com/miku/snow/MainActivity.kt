@@ -754,6 +754,8 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                         SwitchPreference(
                             title = "无法截屏、录屏获取",
                             summary = if (!skipUsable) "当前：未生效（需要 root 或 Shizuku 授权）"
+                            else if (android.os.Build.VERSION.SDK_INT < 33)
+                                "当前系统（Android ${android.os.Build.VERSION.SDK_INT}）不支持，雪花会进截图"
                             else "当前：" + OverlayService.layerState,
                             checked = skipUsable && secure,
                             enabled = skipUsable,
@@ -1694,7 +1696,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.3") })
+                    BasicComponent(title = "版本", endActions = { Text("7.4") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",

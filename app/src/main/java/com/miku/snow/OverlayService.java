@@ -189,7 +189,10 @@ public class OverlayService extends Service {
         } catch (Throwable ignored) {
         }
         Priv.refreshAsync(this);
-        if (wantSecure && Build.VERSION.SDK_INT >= 29 && addSkipScreenshotLayer()) {
+        // SurfaceView 这条线在 Android 12 及以下会被系统当成可触摸层，
+        // 打开后整屏滑不动（只有本应用窗口内还能滑）。老系统上跳过截图本来也打不上，
+        // 所以这里直接退回普通窗口，宁可截图里有雪花，也不抢触摸。
+        if (wantSecure && Build.VERSION.SDK_INT >= 33 && addSkipScreenshotLayer()) {
             skipApplied = true;
             layerState = "已用「跳过截图」标记：截图里没有雪花，屏幕照常显示";
         } else {
