@@ -105,14 +105,8 @@ class MainActivity : ComponentActivity() {
             } catch (t: Throwable) {
             }
         }
-        // Shizuku 的接口权限 API_V23 是 dangerous，必须运行时申请，
-        // 否则管理器拒绝把 binder 发给本应用，永远显示「未连接」。
-        try {
-            if (!ShizukuHelper.apiPermissionGranted(this)) {
-                requestPermissions(arrayOf("moe.shizuku.manager.permission.API_V23"), 2001)
-            }
-        } catch (t: Throwable) {
-        }
+        // Shizuku 的接口权限改成「用户点授权时才申请」，启动时不再自动弹窗，
+        // 否则每次回前台都会跳一次系统授权框。
 
         try {
             ShizukuHelper.init(this)
@@ -541,6 +535,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var showColor by remember { mutableStateOf(false) }
     var showPalette by remember { mutableStateOf(false) }
     var showLog by remember { mutableStateOf(false) }
+    var confirmShizuku by remember { mutableStateOf(false) }
     var logOnlyNew by remember { mutableStateOf(false) }
     var blurTitle by remember { mutableStateOf(Prefs.blurTitle(ctx)) }
     var predictBack by remember { mutableStateOf(Prefs.predictBack(ctx)) }
@@ -556,6 +551,16 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var running by remember { mutableStateOf(Prefs.running(ctx)) }
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(ctx)) }
     var themeMode by remember { mutableStateOf(Prefs.themeMode(ctx)) }
+    // 通知栏里点「关闭」后服务已经停了，这里跟住真实状态，别把界面停在「开启」
+    LaunchedEffect(Unit) {
+        while (true) {
+            val real = Prefs.running(ctx)
+            if (real != running) running = real
+            canOverlay = Settings.canDrawOverlays(ctx)
+            kotlinx.coroutines.delay(1500)
+        }
+    }
+
 
     var showPerm by remember { mutableStateOf(false) }
     var showDiag by remember { mutableStateOf(false) }
@@ -710,9 +715,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     // 不必等 rish 那条慢通道，界面能马上从灰变亮。
     LaunchedEffect(Unit) {
         while (true) {
-            if (!ShizukuHelper.available()) {
-                try { ShizukuHelper.requestBinder(ctx) } catch (t: Throwable) { }
-            }
+            // 不再自动索取 binder：Shizuku 的授权框由用户点「授权」时手动触发一次
             val authorized = try { ShizukuHelper.authorized() } catch (t: Throwable) { false }
             val rootFast = hasShellPriv
             hasShellPriv = authorized || rootFast || Priv.cachedOk()
@@ -1222,23 +1225,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DlgButton("Shizuku 授权", Modifier.weight(1f), primary = true) {
-                    Thread {
-                        val out = RishHelper.grantOverlay(ctx)
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            canOverlay = Settings.canDrawOverlays(ctx)
-                            if (out == null) {
-                                diag = "Shizuku 授权失败：\n" + RishHelper.lastLog()
-                                toast(ctx, "没跑通，看诊断")
-                            } else {
-                                diag = "Shizuku 授权输出：\n" + out + "\n\ncanDrawOverlays=" + canOverlay
-                                // rish 真跑通了，说明 shell 身份拿到了。直接置为可用，
-                                // 否则界面还要等后台探测，期间一直是灰的。
-                                Priv.markOk(ctx, "已授权（终端方式）")
-                                hasShellPriv = true
-                                toast(ctx, if (canOverlay) "已授权" else "命令已执行，看诊断里的 id 输出")
-                            }
-                        }
-                    }.start()
+                    confirmShizuku = true
                 }
                 DlgButton("Root 授权", Modifier.weight(1f)) {
                     if (!RootHelper.available()) {
@@ -1492,6 +1479,45 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 }
                 Spacer(Modifier.height(8.dp))
                 DlgButton("关闭", Modifier.fillMaxWidth()) { showPalette = false }
+            }
+        }
+    }
+
+    // Shizuku 授权：先问一句，确认后再跳系统/Shizuku 的授权页
+    if (confirmShizuku) MikuDialog(
+        onDismiss = { confirmShizuku = false },
+        title = "Shizuku 授权",
+        summary = "需要借 Shizuku 的 shell 身份执行几条授权命令。\n\n点「继续」后会跳一次授权确认，允许即可；只会跳这一次。"
+    ) {
+        Column {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DlgButton("继续", Modifier.weight(1f), primary = true) {
+                    confirmShizuku = false
+                    try {
+                        if (!ShizukuHelper.apiPermissionGranted(ctx)) {
+                            (ctx as? android.app.Activity)?.requestPermissions(
+                                arrayOf("moe.shizuku.manager.permission.API_V23"), 2001
+                            )
+                        }
+                    } catch (t: Throwable) {
+                    }
+                    Thread {
+                        val out = RishHelper.grantOverlay(ctx)
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            canOverlay = Settings.canDrawOverlays(ctx)
+                            if (out == null) {
+                                diag = "Shizuku 授权失败：\n" + RishHelper.lastLog()
+                                toast(ctx, "没跑通，看诊断")
+                            } else {
+                                diag = "Shizuku 授权输出：\n" + out + "\n\ncanDrawOverlays=" + canOverlay
+                                Priv.markOk(ctx, "已授权（终端方式）")
+                                hasShellPriv = true
+                                toast(ctx, if (canOverlay) "已授权" else "命令已执行，看诊断里的 id 输出")
+                            }
+                        }
+                    }.start()
+                }
+                DlgButton("取消", Modifier.weight(1f)) { confirmShizuku = false }
             }
         }
     }
@@ -1805,7 +1831,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.6") })
+                    BasicComponent(title = "版本", endActions = { Text("7.8") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
