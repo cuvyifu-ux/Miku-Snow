@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -249,6 +250,59 @@ private fun MainActivity.showCrashScreen(trace: String) {
 // LocalNavigationEventDispatcherOwner（activity-compose 1.11 没提供），一显示就崩。
 // 这里用 Miuix 的 Card / TextButton 自绘一个同款底部/居中弹窗，外观一致且不挑宿主。
 private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
+
+private data class LogEntry(val code: Int, val version: String, val items: List<String>)
+
+private val CHANGELOG = listOf(
+    LogEntry(55, "6.4", listOf(
+        "修复关于页打开即闪退（启动图标用了自适应图标 XML，Compose 不认）",
+        "新增飘字颜色：雪白 / 冰蓝 / 樱花粉 / 薄荷绿 / 暖金 / 紫"
+    )),
+    LogEntry(56, "6.5", listOf(
+        "关于页做返回手势改为退回主页，不再直接退出应用",
+        "颜色列表新增「自定义颜色」，调色盘可手动调色，只有一张卡，重新调会覆盖"
+    )),
+    LogEntry(57, "6.6", listOf(
+        "「主题颜色」改名「主题」，点开为整页：主题颜色 / 标题模糊 / 预测性返回手势 / 调整大小",
+        "主页与关于页新增折叠标题：大标题模糊消散，居中小标题由模糊变清晰",
+        "数量 / 速度 / 大小 / 调整大小 的数值可点击手动输入",
+        "关于页「功能」改为卡片外分组小标题"
+    )),
+    LogEntry(58, "6.7", listOf(
+        "弹窗改为独立窗口，主题页里点数值立刻可见，退出页面不再残留",
+        "开启系统预测性返回支持，子页面返回一律回主页"
+    )),
+    LogEntry(59, "6.8", listOf(
+        "预测性返回手势跟手：页面随手指平移，松手过阈值才回主页"
+    )),
+    LogEntry(60, "6.9", listOf(
+        "修复返回松手时出现上一页残影"
+    )),
+    LogEntry(61, "7.0", listOf(
+        "修复慢速滑出后页面闪回一帧"
+    )),
+    LogEntry(62, "7.1", listOf(
+        "关闭预测性返回手势后不再跟手",
+        "快速甩动返回时补一段滑出动画，不再直接跳页"
+    )),
+    LogEntry(63, "7.2", listOf(
+        "root 下解除隐藏 API 限制，让「跳过截图」的标记能真正打上"
+    )),
+    LogEntry(64, "7.3", listOf(
+        "悬浮层强制不吃触摸，部分平板上开启后仍能正常滑动"
+    )),
+    LogEntry(65, "7.4", listOf(
+        "Android 13 以下不再使用覆盖层，避免整屏挡触摸"
+    )),
+    LogEntry(66, "7.5", listOf(
+        "关闭预测性返回手势后，保留从左往右滑出的退场动画"
+    )),
+    LogEntry(67, "7.6", listOf(
+        "更新日志功能：首次打开显示全部记录，之后只提示新版本",
+        "「无法截屏、录屏获取」恢复为实验性选项，不再按系统版本限制，说明改为效果因机型而异",
+        "修复更新提示浮条里「查看」按钮被挤压"
+    ))
+)
 
 private val COLOR_NAMES = listOf("雪白", "冰蓝", "樱花粉", "薄荷绿", "暖金", "紫")
 private val COLOR_VALUES = listOf(
@@ -486,10 +540,19 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var textColor by remember { mutableStateOf(Prefs.textColor(ctx)) }
     var showColor by remember { mutableStateOf(false) }
     var showPalette by remember { mutableStateOf(false) }
+    var showLog by remember { mutableStateOf(false) }
+    var logOnlyNew by remember { mutableStateOf(false) }
     var blurTitle by remember { mutableStateOf(Prefs.blurTitle(ctx)) }
     var predictBack by remember { mutableStateOf(Prefs.predictBack(ctx)) }
     var uiScale by remember { mutableStateOf(Prefs.uiScale(ctx)) }
     var editKind by remember { mutableStateOf(0) }   // 1 数量 2 速度 3 大小 4 缩放
+    LaunchedEffect(Unit) {
+        val seen = Prefs.seenLog(ctx)
+        if (CHANGELOG.any { it.code > seen }) {
+            logOnlyNew = true
+            showLog = true
+        }
+    }
     var running by remember { mutableStateOf(Prefs.running(ctx)) }
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(ctx)) }
     var themeMode by remember { mutableStateOf(Prefs.themeMode(ctx)) }
@@ -754,9 +817,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                         SwitchPreference(
                             title = "无法截屏、录屏获取",
                             summary = if (!skipUsable) "当前：未生效（需要 root 或 Shizuku 授权）"
-                            else if (android.os.Build.VERSION.SDK_INT < 33)
-                                "当前系统（Android ${android.os.Build.VERSION.SDK_INT}）不支持，雪花会进截图"
-                            else "当前：" + OverlayService.layerState,
+                            else "实验性功能，效果因机型而异。当前：" + OverlayService.layerState,
                             checked = skipUsable && secure,
                             enabled = skipUsable,
                             onCheckedChange = { v ->
@@ -1285,16 +1346,24 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 insideMargin = PaddingValues(14.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = autoNew, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = autoNew,
+                        fontSize = 13.sp,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(12.dp))
                     Button(
                         onClick = {
                             autoNew = ""
                             page = 1
                             pendingCheck = true
                         },
-                        modifier = Modifier.height(38.dp)
-                    ) { Text("查看") }
+                        modifier = Modifier
+                            .height(38.dp)
+                            .widthIn(min = 76.dp)
+                    ) { Text("查看", maxLines = 1) }
                 }
             }
         }
@@ -1423,6 +1492,38 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 }
                 Spacer(Modifier.height(8.dp))
                 DlgButton("关闭", Modifier.fillMaxWidth()) { showPalette = false }
+            }
+        }
+    }
+
+    // 更新日志
+    if (showLog) {
+        val seen = Prefs.seenLog(ctx)
+        val entries = if (logOnlyNew && seen > 0) CHANGELOG.filter { it.code > seen }
+        else CHANGELOG
+        MikuDialog(
+            onDismiss = { },
+            title = "更新日志",
+            summary = if (seen == 0) "首次使用，这里是全部版本记录"
+            else "本次更新 ${entries.size} 个版本"
+        ) {
+            Column {
+                entries.sortedBy { it.code }.forEach { e ->
+                    Text(
+                        text = e.version,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    e.items.forEach { item ->
+                        Text(text = "· $item", fontSize = 13.sp)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+                DlgButton("确定", Modifier.fillMaxWidth(), primary = true) {
+                    Prefs.setSeenLog(ctx, CHANGELOG.maxOf { it.code })
+                    showLog = false
+                    logOnlyNew = false
+                }
             }
         }
     }
@@ -1704,7 +1805,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.5") })
+                    BasicComponent(title = "版本", endActions = { Text("7.6") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
@@ -1719,6 +1820,15 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                                 toast(ctx, "没有可用的浏览器")
                             }
                         }
+                    )
+                    BasicComponent(
+                        title = "更新日志",
+                        summary = "查看各版本改了什么",
+                        onClick = {
+                            logOnlyNew = false
+                            showLog = true
+                        },
+                        endActions = { Text("查看") }
                     )
                     BasicComponent(
                         title = "检查更新",

@@ -128,6 +128,15 @@ public final class Prefs {
         sp(c).edit().putBoolean("no_text", v).apply();
     }
 
+    /** 已读过更新日志的最高版本号 */
+    public static int seenLog(Context c) {
+        return sp(c).getInt("seen_log", 0);
+    }
+
+    public static void setSeenLog(Context c, int v) {
+        sp(c).edit().putInt("seen_log", v).apply();
+    }
+
     /** 是否已在 root 下解除隐藏 API 限制（解除后需要重启应用才生效） */
     public static boolean hiddenUnlocked(Context c) {
         return sp(c).getBoolean("hidden_unlocked", false);
