@@ -1,0 +1,8 @@
+build/
+.gradle/
+local.properties
+*.apk
+*.p12
+*.keystore
+app/libs/
+app/src/main/assets/
