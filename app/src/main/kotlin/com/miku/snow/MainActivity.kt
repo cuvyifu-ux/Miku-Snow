@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -497,7 +499,19 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var page by remember { mutableStateOf(0) }          // 0 = 主页，1 = 关于
     var latestUrl by remember { mutableStateOf("") }
     // 关于页里做返回手势 → 回主页，别直接退出应用
-    androidx.activity.compose.BackHandler(enabled = page != 0) {
+    // 预测性返回：手势过程中页面跟手位移，松手完成才回主页
+    var backProgress by remember { mutableStateOf(0f) }
+    val screenW = with(LocalDensity.current) {
+        LocalConfiguration.current.screenWidthDp.dp.toPx()
+    }
+    androidx.activity.compose.PredictiveBackHandler(enabled = page != 0) { progress ->
+        try {
+            progress.collect { ev -> backProgress = ev.progress }
+        } catch (c: kotlinx.coroutines.CancellationException) {
+            backProgress = 0f
+            throw c
+        }
+        backProgress = 0f
         page = 0
     }
 
@@ -1451,6 +1465,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .graphicsLayer { translationX = backProgress * screenW }
                     .background(if (dark) Color(0xFF000000) else Color(0xFFFFFFFF))
             ) {
                 FoldingTitle(
@@ -1596,6 +1611,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer { translationX = backProgress * screenW }
                 .background(if (dark) Color(0xFF000000) else Color(0xFFFFFFFF))
         ) {
             FoldingTitle(
@@ -1657,7 +1673,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("6.7") })
+                    BasicComponent(title = "版本", endActions = { Text("6.8") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
