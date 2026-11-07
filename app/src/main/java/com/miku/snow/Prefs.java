@@ -119,6 +119,33 @@ public final class Prefs {
         sp(c).edit().putBoolean("only_images", v).apply();
     }
 
+    /** 不飘文字：只飘图片。还没导入图片时仍然飘字，免得屏幕上什么都没有。 */
+    public static boolean noText(Context c) {
+        return sp(c).getBoolean("no_text", false);
+    }
+
+    public static void setNoText(Context c, boolean v) {
+        sp(c).edit().putBoolean("no_text", v).apply();
+    }
+
+    /** 飘字颜色：0 雪白 1 冰蓝 2 樱花粉 3 薄荷绿 4 暖金 5 紫 */
+    public static int textColor(Context c) {
+        return Math.max(0, Math.min(5, sp(c).getInt("text_color", 0)));
+    }
+
+    public static void setTextColor(Context c, int v) {
+        sp(c).edit().putInt("text_color", Math.max(0, Math.min(5, v))).apply();
+    }
+
+    /** 单字飘落：勾上每个字单独飘；不勾则整段文字一起飘。 */
+    public static boolean singleChar(Context c) {
+        return sp(c).getBoolean("single_char", false);
+    }
+
+    public static void setSingleChar(Context c, boolean v) {
+        sp(c).edit().putBoolean("single_char", v).apply();
+    }
+
     // ---------------- 防截屏 / 防录屏 ----------------
     /** 给悬浮层加 FLAG_SECURE：截屏、录屏、投屏里都不会出现飘雪的内容。 */
     public static boolean secure(Context c) {

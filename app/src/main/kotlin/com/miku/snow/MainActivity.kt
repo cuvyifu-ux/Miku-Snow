@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
@@ -107,6 +108,12 @@ class MainActivity : ComponentActivity() {
             // Shizuku 没装 / binder 不通时不要连累主界面
         }
         try {
+            // provider 的 onCreate 不一定被拉起，这里主动要一次 binder，
+            // 否则已经授权了也 pingBinder=false，界面一直灰着
+            ShizukuHelper.requestBinder(this)
+        } catch (t: Throwable) {
+        }
+        try {
             Prefs.ensureAdbScript(this)
         } catch (t: Throwable) {
         }
@@ -122,6 +129,46 @@ class MainActivity : ComponentActivity() {
                 })
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (Prefs.running(this)) {
+            try {
+                startService(
+                    Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_START)
+                )
+            } catch (t: Throwable) {
+            }
+        }
+        try {
+            if (Prefs.running(this)) {
+                val i = Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_START)
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
+            }
+        } catch (t: Throwable) {
+        }
+        try {
+            // 从后台回来时 overlay 可能已经停画（SurfaceView 的 Surface 被系统回收），
+            // 这里重发一次 START，服务里没层会重建，有层会重新套配置
+            if (Prefs.running(this)) {
+                val i = Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_START)
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
+            }
+        } catch (t: Throwable) {
+        }
+        try {
+            ShizukuHelper.init(this)
+            ShizukuHelper.requestBinder(this)
+        } catch (t: Throwable) {
+        }
+        Thread {
+            try {
+                RishHelper.prepare(this)
+                Priv.refreshAsync(this)
+            } catch (t: Throwable) {
+            }
+        }.start()
     }
 
     override fun onRequestPermissionsResult(
@@ -179,6 +226,11 @@ private fun MainActivity.showCrashScreen(trace: String) {
 // LocalNavigationEventDispatcherOwner（activity-compose 1.11 没提供），一显示就崩。
 // 这里用 Miuix 的 Card / TextButton 自绘一个同款底部/居中弹窗，外观一致且不挑宿主。
 private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
+
+private val COLOR_NAMES = listOf("雪白", "冰蓝", "樱花粉", "薄荷绿", "暖金", "紫")
+private val COLOR_VALUES = listOf(
+    0xFFFFFFFF, 0xFF7FE7FF, 0xFFFFB3CE, 0xFF6FF7C8, 0xFFFFD166, 0xFFC9A7FF
+)
 
 @Composable
 private fun MikuDialog(
@@ -334,6 +386,10 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
     var secure by remember { mutableStateOf(Prefs.secure(ctx)) }
     var useImages by remember { mutableStateOf(Prefs.useImages(ctx)) }
     var onlyImages by remember { mutableStateOf(Prefs.onlyImages(ctx)) }
+    var noText by remember { mutableStateOf(Prefs.noText(ctx)) }
+    var singleChar by remember { mutableStateOf(Prefs.singleChar(ctx)) }
+    var textColor by remember { mutableStateOf(Prefs.textColor(ctx)) }
+    var showColor by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(Prefs.running(ctx)) }
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(ctx)) }
     var themeMode by remember { mutableStateOf(Prefs.themeMode(ctx)) }
@@ -348,7 +404,10 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
         ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "0"
     } catch (t: Throwable) { "0" }
     var showNoPriv by remember { mutableStateOf(false) }
-    var hasShellPriv by remember { mutableStateOf(Priv.cachedOk()) }
+    var hasShellPriv by remember { mutableStateOf(Priv.cachedOk() || Priv.rememberedOk(ctx)) }
+    var retryTick by remember { mutableStateOf(0) }
+    var autoNew by remember { mutableStateOf("") }     // 启动时自动查到的更新提示
+    var pendingCheck by remember { mutableStateOf(false) }
 
     var privDetail by remember { mutableStateOf("") }
 
@@ -364,6 +423,32 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
         1 -> false
         2 -> true
         else -> isSystemInDarkTheme()
+    }
+
+    // 状态栏 / 导航栏跟着主题走：原来固定用 Light 主题，深色界面顶上就留一条白条
+    androidx.compose.runtime.SideEffect {
+        val act = ctx as? android.app.Activity
+        val w = act?.window
+        if (w != null) {
+            val bar = if (dark) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+            w.statusBarColor = bar
+            w.navigationBarColor = bar
+            if (Build.VERSION.SDK_INT >= 30) {
+                val c = w.insetsController
+                if (c != null) {
+                    val light = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                    val lightNav = android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                    c.setSystemBarsAppearance(
+                        if (dark) 0 else (light or lightNav),
+                        light or lightNav
+                    )
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                w.decorView.systemUiVisibility =
+                    if (dark) 0 else android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            }
+        }
     }
 
     fun push() {
@@ -424,6 +509,9 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
     // 不必等 rish 那条慢通道，界面能马上从灰变亮。
     LaunchedEffect(Unit) {
         while (true) {
+            if (!ShizukuHelper.available()) {
+                try { ShizukuHelper.requestBinder(ctx) } catch (t: Throwable) { }
+            }
             val authorized = try { ShizukuHelper.authorized() } catch (t: Throwable) { false }
             val rootFast = hasShellPriv
             hasShellPriv = authorized || rootFast || Priv.cachedOk()
@@ -431,8 +519,37 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                 try { Priv.refreshAsync(ctx) } catch (t: Throwable) { }
             }
             privDetail = Priv.detail()
+            // 从后台回来 / binder 掉过，skip 层可能已经失效：开着但没生效就重建一次
+            retryTick++
+            if (retryTick % 3 == 0) {
+                val applied = OverlayService.layerState.contains("生效")
+                if (Prefs.running(ctx) && Prefs.secure(ctx) && hasShellPriv && !applied) {
+                    try {
+                        ctx.startService(
+                            Intent(ctx, OverlayService::class.java)
+                                .setAction(OverlayService.ACTION_REFRESH)
+                        )
+                    } catch (t: Throwable) {
+                    }
+                }
+            }
             delay(2000)
         }
+    }
+
+    // 打开就自动查一次，有新版本就在底部浮一条
+    LaunchedEffect(Unit) {
+        delay(1500)
+        Thread {
+            try {
+                val r = UpdateChecker.check(GitHubUrl, currentVersion)
+                if (r != null && r.hasUpdate) {
+                    val msg = r.message
+                    android.os.Handler(android.os.Looper.getMainLooper()).post { autoNew = msg }
+                }
+            } catch (t: Throwable) {
+            }
+        }.start()
     }
 
     Scaffold { pad ->
@@ -486,6 +603,12 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
 
             // 一个普通开关：有 root / ADB 时正常可用，否则灰掉、点了弹「当前权限无法调用」
             val skipUsable = hasShellPriv
+            // 分组标题放在卡片外面、左上角，跟系统设置页那种写法一致
+            Text(
+                text = "实验性选项",
+                fontSize = 13.sp,
+                modifier = Modifier.padding(start = 16.dp, bottom = 6.dp)
+            )
             Card(insideMargin = PaddingValues(0.dp)) {
                 Box {
                     androidx.compose.foundation.layout.Box(
@@ -498,8 +621,9 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                     ) {
                         SwitchPreference(
                             title = "无法截屏、录屏获取",
-                            summary = "当前：" + OverlayService.layerState,
-                            checked = secure,
+                            summary = if (!skipUsable) "当前：未生效（需要 root 或 Shizuku 授权）"
+                            else "当前：" + OverlayService.layerState,
+                            checked = skipUsable && secure,
                             enabled = skipUsable,
                             onCheckedChange = { v ->
                                 if (!skipUsable) {
@@ -528,11 +652,22 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                 TextField(
                     value = text,
                     onValueChange = { v -> if (v.length <= Prefs.MAX_TEXT) text = v },
-                    label = "要飘的字（每个字单独飘）"
+                    label = "要飘的文字"
                 )
                 BasicComponent(
                     title = "字数",
                     summary = "${text.length} / ${Prefs.MAX_TEXT}　停顿 0.3 秒自动保存"
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Card(insideMargin = PaddingValues(0.dp)) {
+                BasicComponent(
+                    title = "飘字颜色",
+                    summary = COLOR_NAMES.getOrElse(textColor) { "雪白" },
+                    onClick = { showColor = true },
+                    endActions = { Text(COLOR_NAMES.getOrElse(textColor) { "雪白" }) }
                 )
             }
 
@@ -576,6 +711,24 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                 valueRange = 60f..220f,
                 steps = 159
             )
+
+            Spacer(Modifier.height(8.dp))
+            Card(insideMargin = PaddingValues(0.dp)) {
+                BasicComponent(
+                    title = "恢复默认数值",
+                    summary = "数量 44 个 · 速度 100% · 大小 100%",
+                    onClick = {
+                        count = 44
+                        speed = 100
+                        size = 100
+                        Prefs.setCount(ctx, 44)
+                        Prefs.setSpeedRaw(ctx, 100)
+                        Prefs.setSizeRaw(ctx, 100)
+                        push()
+                    },
+                    endActions = { Text("恢复") }
+                )
+            }
 
             Spacer(Modifier.height(12.dp))
             Card(insideMargin = PaddingValues(0.dp)) {
@@ -651,6 +804,26 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                     onCheckedChange = {
                         onlyImages = it
                         Prefs.setOnlyImages(ctx, it)
+                        push()
+                    }
+                )
+                SwitchPreference(
+                    title = "不飘文字",
+                    summary = "还没有导入图片时，文字照旧飘",
+                    checked = noText,
+                    onCheckedChange = {
+                        noText = it
+                        Prefs.setNoText(ctx, it)
+                        push()
+                    }
+                )
+                SwitchPreference(
+                    title = "单字飘落",
+                    summary = "勾上后每个字单独往下落，不勾就是整段文字一起飘",
+                    checked = singleChar,
+                    onCheckedChange = {
+                        singleChar = it
+                        Prefs.setSingleChar(ctx, it)
                         push()
                     }
                 )
@@ -832,6 +1005,10 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                                 toast(ctx, "没跑通，看诊断")
                             } else {
                                 diag = "Shizuku 授权输出：\n" + out + "\n\ncanDrawOverlays=" + canOverlay
+                                // rish 真跑通了，说明 shell 身份拿到了。直接置为可用，
+                                // 否则界面还要等后台探测，期间一直是灰的。
+                                Priv.markOk(ctx, "已授权（终端方式）")
+                                hasShellPriv = true
                                 toast(ctx, if (canOverlay) "已授权" else "命令已执行，看诊断里的 id 输出")
                             }
                         }
@@ -843,6 +1020,10 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                     }
                     diag = RootHelper.grantOverlay(ctx)
                     canOverlay = Settings.canDrawOverlays(ctx)
+                    if (RootHelper.available()) {
+                        Priv.markOk(ctx, "root 可用")
+                        hasShellPriv = true
+                    }
                     toast(ctx, if (Settings.canDrawOverlays(ctx)) "已授权" else "命令已执行，见诊断")
                 }
             }
@@ -929,6 +1110,67 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
         )
     }
 
+    // 底部浮条：自动检查发现新版本
+    if (autoNew.isNotEmpty() && page == 0) {
+        androidx.compose.ui.window.Popup(alignment = Alignment.BottomCenter) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 18.dp),
+                insideMargin = PaddingValues(14.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = autoNew, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(10.dp))
+                    Button(
+                        onClick = {
+                            autoNew = ""
+                            page = 1
+                            pendingCheck = true
+                        },
+                        modifier = Modifier.height(38.dp)
+                    ) { Text("查看") }
+                }
+            }
+        }
+    }
+
+    // 飘字颜色
+    if (showColor) MikuDialog(
+        onDismiss = { showColor = false },
+        title = "飘字颜色",
+        summary = "每个字在这组颜色里随机取一个"
+    ) {
+        Column {
+            COLOR_VALUES.forEachIndexed { idx, c ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            textColor = idx
+                            Prefs.setTextColor(ctx, idx)
+                            showColor = false
+                            push()
+                        }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(Color(c))
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(text = COLOR_NAMES[idx], fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    if (idx == textColor) Text(text = "✓", fontSize = 14.sp)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            DlgButton("关闭", Modifier.fillMaxWidth()) { showColor = false }
+        }
+    }
+
     // 关于页（从右往左滑入 / 滑出，避免生硬切换）
     androidx.compose.animation.AnimatedVisibility(
         visible = page == 1,
@@ -940,6 +1182,24 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
     run {
         var checkMsg by remember { mutableStateOf("") }
         var checking by remember { mutableStateOf(false) }
+
+        LaunchedEffect(pendingCheck) {
+            if (pendingCheck) {
+                pendingCheck = false
+                if (!checking) {
+                    checking = true
+                    checkMsg = "正在检查…"
+                    Thread {
+                        val r = UpdateChecker.check(GitHubUrl, currentVersion)
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            checking = false
+                            checkMsg = r.message
+                            if (r.hasUpdate && r.url.isNotEmpty()) latestUrl = r.url
+                        }
+                    }.start()
+                }
+            }
+        }
 
         Box(
             modifier = Modifier
@@ -953,9 +1213,19 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                     .padding(horizontal = 16.dp)
                     .padding(top = 24.dp, bottom = 28.dp)
             ) {
-                Text(text = "关于", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(2.dp))
-                Text(text = "Miku · 飘雪", fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        painter = painterResource(R.drawable.app_icon),
+                        contentDescription = null,
+                        modifier = Modifier.size(58.dp)
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text(text = "Miku", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(2.dp))
+                        Text(text = "版本 " + currentVersion, fontSize = 13.sp)
+                    }
+                }
                 Spacer(Modifier.height(16.dp))
 
                 // 想法
@@ -984,7 +1254,7 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("5.4") })
+                    BasicComponent(title = "版本", endActions = { Text("6.4") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",

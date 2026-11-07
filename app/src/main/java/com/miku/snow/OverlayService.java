@@ -59,12 +59,32 @@ public class OverlayService extends Service {
     private long lastFrameNanos;
     private boolean drawing;
     private Thread drawThread;
+    /** 看门狗：切后台再回来，Surface 可能已经停画，这里发现超过 6 秒没新帧就重建整层 */
+    private final Runnable watchdog = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                if (added) {
+                    boolean stale = !drawing
+                            || (lastFrameNanos > 0
+                            && System.nanoTime() - lastFrameNanos > 6_000_000_000L);
+                    if (stale) {
+                        removeOverlay();
+                        addOverlay();
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            mainHandler.postDelayed(this, 4000);
+        }
+    };
 
     @Override
     public void onCreate() {
         super.onCreate();
         windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         createChannel();
+        mainHandler.postDelayed(watchdog, 1500);
     }
 
     @Override
@@ -420,16 +440,31 @@ public class OverlayService extends Service {
             return;
         }
         snowView.setImages(ImageStore.load(this, ImageStore.MAX_IMAGES));
+        snowView.setGlyphTheme(Prefs.textColor(this));
+        // 「只飘图片 / 不飘文字」在确实有图片时才生效；
+        // 一张图都没导入时，屏幕上飘出来的文字直接换成提示「还没有导入图片」，
+        // 这样即使一个字都没填，屏幕也不会空着。
+        int imgCount = ImageStore.count(this);
+        boolean onlyImagesOn = Prefs.onlyImages(this) || Prefs.noText(this);
+        boolean onlyImagesEff = onlyImagesOn && imgCount > 0;
+        String floatText = Prefs.text(this);
+        if (onlyImagesOn && imgCount == 0) {
+            floatText = "还没有导入图片";
+        }
+        if (floatText.trim().isEmpty() && imgCount == 0) {
+            floatText = "还没有导入图片";
+        }
         snowView.applyConfig(
-                Prefs.text(this),
+                floatText,
                 Prefs.count(this),
                 Prefs.speed(this),
                 Prefs.size(this),
                 Prefs.useImages(this),
-                Prefs.onlyImages(this),
+                onlyImagesEff,
                 Prefs.spin(this),
                 Prefs.flip(this),
-                Prefs.tilt(this));
+                Prefs.tilt(this),
+                Prefs.singleChar(this));
     }
 
     private void removeOverlay() {
@@ -462,6 +497,7 @@ public class OverlayService extends Service {
 
     @Override
     public void onDestroy() {
+        mainHandler.removeCallbacks(watchdog);
         removeOverlay();
         Prefs.setRunning(this, false);
         super.onDestroy();

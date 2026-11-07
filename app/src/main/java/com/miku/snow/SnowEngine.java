@@ -50,6 +50,7 @@ public final class SnowEngine {
     private float speedFactor = 1f;
     private float sizeFactor = 1f;
     private boolean useImages = true;
+    private boolean singleChar = false;   // false = 整段文字一起飘
     private boolean imagesOnly = false;
     private int imageCount = 0;
     private boolean spin = true;
@@ -70,6 +71,14 @@ public final class SnowEngine {
 
     public ArrayList<P> particles() {
         return ps;
+    }
+
+    public boolean singleChar() {
+        return singleChar;
+    }
+
+    public float width() {
+        return w;
     }
 
     public String text() {
@@ -106,7 +115,7 @@ public final class SnowEngine {
 
     public void setConfig(int count, float speed, float scale,
                           boolean useImages, boolean imagesOnly, int imageCount,
-                          boolean spin, boolean flip, boolean tilt) {
+                          boolean spin, boolean flip, boolean tilt, boolean singleChar) {
         this.targetCount = Math.max(4, Math.min(140, count));
         this.speedFactor = Math.max(0.2f, Math.min(3f, speed));
         this.sizeFactor = Math.max(0.4f, Math.min(2.5f, scale));
@@ -116,6 +125,7 @@ public final class SnowEngine {
         this.spin = spin;
         this.flipEnabled = flip;
         this.tiltEnabled = tilt;
+        this.singleChar = singleChar;
 
         computeFit();
         while (ps.size() > effective) ps.remove(ps.size() - 1);

@@ -26,11 +26,36 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
     private final Paint.FontMetrics fm = new Paint.FontMetrics();
 
     /** 偏冷的白，落在任何背景上都像雪。 */
-    private final int[] letterColors = {
+    private int[] letterColors = {
             0xFFFFFFFF,
             0xFFEAF8FF,
             0xFFD6F2FF
     };
+
+    /** 换一组字色（下标见 Prefs.textColor） */
+    public void setGlyphTheme(int idx) {
+        switch (idx) {
+            case 1:
+                letterColors = new int[]{0xFF7FE7FF, 0xFF4FC3F7, 0xFFB3F0FF};
+                break;
+            case 2:
+                letterColors = new int[]{0xFFFFC2D9, 0xFFFF8FB1, 0xFFFFE3EE};
+                break;
+            case 3:
+                letterColors = new int[]{0xFF6FF7C8, 0xFF2ED8A7, 0xFFC8FFE9};
+                break;
+            case 4:
+                letterColors = new int[]{0xFFFFE08A, 0xFFFFC64D, 0xFFFFF3C4};
+                break;
+            case 5:
+                letterColors = new int[]{0xFFD8B4FF, 0xFFB388FF, 0xFFEEDCFF};
+                break;
+            default:
+                letterColors = new int[]{0xFFFFFFFF, 0xFFEAF8FF, 0xFFD6F2FF};
+                break;
+        }
+        invalidate();
+    }
 
     private Bitmap[] images = new Bitmap[0];
     private boolean running;
@@ -56,9 +81,9 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
 
     public void applyConfig(String text, int count, float speed, float scale,
                             boolean useImages, boolean imagesOnly,
-                            boolean spin, boolean flip, boolean tilt) {
+                            boolean spin, boolean flip, boolean tilt, boolean singleChar) {
         engine.setText(text);
-        engine.setConfig(count, speed, scale, useImages, imagesOnly, images.length, spin, flip, tilt);
+        engine.setConfig(count, speed, scale, useImages, imagesOnly, images.length, spin, flip, tilt, singleChar);
         invalidate();
     }
 
@@ -133,8 +158,12 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
                     canvas.drawBitmap(bmp, null, dst, imagePaint);
                 }
             } else if (text.length() > 0) {
-                char c = text.charAt(p.glyphIdx % text.length());
-                String g = String.valueOf(c);
+                String g;
+                if (engine.singleChar()) {
+                    g = String.valueOf(text.charAt(p.glyphIdx % text.length()));
+                } else {
+                    g = text;   // 整段文字当一个粒子
+                }
                 canvas.scale(flipScale, 1f);
                 letterPaint.setTextSize(p.r * 1.66f);
                 letterPaint.setColor(letterColors[p.tint % letterColors.length]);
@@ -142,6 +171,14 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
                 letterPaint.getFontMetrics(fm);
                 float baseline = -(fm.ascent + fm.descent) / 2f;
                 float tw = letterPaint.measureText(g);
+                if (!engine.singleChar()) {
+                    // 整段文字可能比屏幕还宽，等比缩到画面 85% 以内
+                    float maxW = getWidth() * 0.85f;
+                    if (maxW > 0 && tw > maxW) {
+                        float k = maxW / tw;
+                        canvas.scale(k, k);
+                    }
+                }
                 canvas.drawText(g, -tw / 2f, baseline, letterPaint);
             }
             canvas.restore();

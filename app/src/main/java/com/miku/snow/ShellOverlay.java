@@ -89,7 +89,7 @@ public final class ShellOverlay {
 
         SnowEngine engine = new SnowEngine(20261107L);
         engine.setText(text);
-        engine.setConfig(count, speed, scale, false, false, 0, spin, flip, tilt);
+        engine.setConfig(count, speed, scale, false, false, 0, spin, flip, tilt, true);
         engine.setBounds(w, h);
 
         Paint letter = new Paint(Paint.ANTI_ALIAS_FLAG);

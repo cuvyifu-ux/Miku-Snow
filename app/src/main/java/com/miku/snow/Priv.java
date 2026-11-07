@@ -17,6 +17,27 @@ public final class Priv {
     private Priv() {
     }
 
+    /** 某条通道刚刚明确成功了，直接置为可用，不必再等后台探测；顺带落盘，重启后不丢 */
+    public static void markOk(Context c, String why) {
+        cached = true;
+        detail = "Shizuku：" + why;
+        try {
+            c.getSharedPreferences("snow_prefs", Context.MODE_PRIVATE)
+                    .edit().putBoolean("priv_ok", true).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 上次明确成功过；用来在刚启动、探测还没回来时先把开关放亮 */
+    public static boolean rememberedOk(Context c) {
+        try {
+            return c.getSharedPreferences("snow_prefs", Context.MODE_PRIVATE)
+                    .getBoolean("priv_ok", false);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     public static boolean cachedOk() {
         return cached;
     }

@@ -16,6 +16,7 @@ public class UpdateChecker {
 
     public static class Result {
         public boolean hasUpdate;
+        public boolean testBuild;      // 本地版本比发布版还高
         public String message = "";
         public String url = "";
     }
@@ -84,10 +85,15 @@ public class UpdateChecker {
                 return r;
             }
 
-            if (compare(best, currentVersion) > 0) {
+            int cmp = compare(best, currentVersion);
+            if (cmp > 0) {
                 r.hasUpdate = true;
                 r.url = bestUrl;
                 r.message = "发现新版本 " + best + "（当前 " + currentVersion + "）：" + bestName;
+            } else if (cmp < 0) {
+                // 装的是比发布版更高的版本，说明是测试包
+                r.testBuild = true;
+                r.message = "当前版本为测试版本，可能存在稳定性、安全性等问题，请及时更新到正式版";
             } else {
                 r.message = "已是最新版本（" + currentVersion + "）";
             }
