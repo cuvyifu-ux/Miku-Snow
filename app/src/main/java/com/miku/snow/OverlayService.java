@@ -132,12 +132,18 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                // 只负责画雪，永远不吃触摸：这几个 flag 缺一个都可能被某些机型当成可点层
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                 PixelFormat.TRANSLUCENT);
+        // 任何机型都把「不吃触摸」硬写回来，避免上层逻辑 |= 别的 flag 时丢掉了
+        lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        lp.setTitle("MikuSnow");
         lp.gravity = Gravity.TOP | Gravity.START;
         lp.x = 0;
         lp.y = 0;
@@ -149,6 +155,23 @@ public class OverlayService extends Service {
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
         return lp;
+    }
+
+
+    /** 加完窗口后再强制一次「不吃触摸」，某些平板上单靠创建时的 flag 会被忽略 */
+    private void lockTouchThrough(View v) {
+        try {
+            v.setClickable(false);
+            v.setFocusable(false);
+            v.setFocusableInTouchMode(false);
+            WindowManager.LayoutParams lp = (WindowManager.LayoutParams) v.getLayoutParams();
+            if (lp != null) {
+                lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+                windowManager.updateViewLayout(v, lp);
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     private void addOverlay() {
@@ -220,6 +243,7 @@ public class OverlayService extends Service {
             WindowManager.LayoutParams lp = baseParams();
             content = sv;
             windowManager.addView(content, lp);
+            lockTouchThrough(content);
             return true;
         } catch (Throwable t) {
             layerState = "建 SurfaceView 层失败：" + t.getClass().getSimpleName();
@@ -294,6 +318,7 @@ public class OverlayService extends Service {
         layerSecure = false;
         secureApplied = false;
         windowManager.addView(content, lp);
+        lockTouchThrough(content);
     }
 
     private void addSecureLayer() {
@@ -339,6 +364,7 @@ public class OverlayService extends Service {
         content = surfaceView;
         secureApplied = false;
         windowManager.addView(content, lp);
+        lockTouchThrough(content);
     }
 
     /** 只给 SnowView 那一层设 secure：截图里没有雪花，别的都在。 */

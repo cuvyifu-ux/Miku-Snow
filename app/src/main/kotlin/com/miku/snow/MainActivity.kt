@@ -1694,7 +1694,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.2") })
+                    BasicComponent(title = "版本", endActions = { Text("7.3") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
