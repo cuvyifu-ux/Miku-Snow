@@ -1479,7 +1479,11 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
         visible = page == 2,
         enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) +
                 androidx.compose.animation.fadeIn(),
-        exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(120))
+        exit = if (predictBack)
+            androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(120))
+        else
+            androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) +
+                    androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(180))
     ) {
         run {
             var seg by remember { mutableStateOf(if (themeMode == 3) 0 else themeMode) }
@@ -1606,7 +1610,11 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
         visible = page == 1,
         enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) +
                 androidx.compose.animation.fadeIn(),
-        exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(120))
+        exit = if (predictBack)
+            androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(120))
+        else
+            androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) +
+                    androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(180))
     ) {
     run {
         var checkMsg by remember { mutableStateOf("") }
@@ -1696,7 +1704,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.4") })
+                    BasicComponent(title = "版本", endActions = { Text("7.5") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
