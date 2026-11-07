@@ -128,13 +128,49 @@ public final class Prefs {
         sp(c).edit().putBoolean("no_text", v).apply();
     }
 
+    /** 标题模糊：折叠标题用模糊消散/凝聚的方式过渡 */
+    public static boolean blurTitle(Context c) {
+        return sp(c).getBoolean("blur_title", true);
+    }
+
+    public static void setBlurTitle(Context c, boolean v) {
+        sp(c).edit().putBoolean("blur_title", v).apply();
+    }
+
+    /** 预测性返回手势 */
+    public static boolean predictBack(Context c) {
+        return sp(c).getBoolean("predict_back", true);
+    }
+
+    public static void setPredictBack(Context c, boolean v) {
+        sp(c).edit().putBoolean("predict_back", v).apply();
+    }
+
+    /** 界面缩放（百分比，作用于字号） */
+    public static int uiScale(Context c) {
+        return Math.max(70, Math.min(150, sp(c).getInt("ui_scale", 100)));
+    }
+
+    public static void setUiScale(Context c, int v) {
+        sp(c).edit().putInt("ui_scale", Math.max(70, Math.min(150, v))).apply();
+    }
+
     /** 飘字颜色：0 雪白 1 冰蓝 2 樱花粉 3 薄荷绿 4 暖金 5 紫 */
     public static int textColor(Context c) {
-        return Math.max(0, Math.min(5, sp(c).getInt("text_color", 0)));
+        return Math.max(0, Math.min(6, sp(c).getInt("text_color", 0)));
+    }
+
+    /** 自定义色卡（只有一张，重新自定义会覆盖） */
+    public static int customColor(Context c) {
+        return sp(c).getInt("custom_color", 0xFFFFFFFF);
+    }
+
+    public static void setCustomColor(Context c, int argb) {
+        sp(c).edit().putInt("custom_color", argb).apply();
     }
 
     public static void setTextColor(Context c, int v) {
-        sp(c).edit().putInt("text_color", Math.max(0, Math.min(5, v))).apply();
+        sp(c).edit().putInt("text_color", Math.max(0, Math.min(6, v))).apply();
     }
 
     /** 单字飘落：勾上每个字单独飘；不勾则整段文字一起飘。 */

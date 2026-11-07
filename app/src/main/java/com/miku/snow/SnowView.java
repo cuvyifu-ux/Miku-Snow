@@ -50,6 +50,10 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
             case 5:
                 letterColors = new int[]{0xFFD8B4FF, 0xFFB388FF, 0xFFEEDCFF};
                 break;
+            case 6:
+                // 自定义色卡：整组字统一用这一种颜色
+                letterColors = new int[]{Prefs.customColor(getContext())};
+                break;
             default:
                 letterColors = new int[]{0xFFFFFFFF, 0xFFEAF8FF, 0xFFD6F2FF};
                 break;

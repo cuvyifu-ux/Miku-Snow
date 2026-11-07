@@ -38,6 +38,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
@@ -54,9 +56,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -64,6 +68,9 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
@@ -122,11 +129,23 @@ class MainActivity : ComponentActivity() {
             val saved = Prefs.themeMode(this)
             val safe = if (saved == 3 && Build.VERSION.SDK_INT < 31) 0 else saved
             var mode by remember { mutableStateOf(modeOf(safe)) }
-            MiuixTheme(controller = remember(mode) { ThemeController(mode) }) {
-                Screen(onModeChanged = {
-                    Prefs.setThemeMode(this, it)
-                    mode = modeOf(it)
-                })
+            var scale by remember { mutableStateOf(Prefs.uiScale(this)) }
+            val baseDensity = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(
+                    density = baseDensity.density,
+                    fontScale = baseDensity.fontScale * scale / 100f
+                )
+            ) {
+                MiuixTheme(controller = remember(mode) { ThemeController(mode) }) {
+                    Screen(onModeChanged = {
+                        Prefs.setThemeMode(this, it)
+                        mode = modeOf(it)
+                    }, onScaleChanged = {
+                        Prefs.setUiScale(this, it)
+                        scale = it
+                    })
+                }
             }
         }
     }
@@ -239,18 +258,25 @@ private fun MikuDialog(
     summary: String? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xA6000000))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onDismiss
-            ),
-        contentAlignment = Alignment.Center
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
-        Card(
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xA6000000))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
@@ -277,6 +303,7 @@ private fun MikuDialog(
                     content()
                 }
             }
+        }
         }
     }
 }
@@ -372,8 +399,72 @@ private fun WorkingCard(running: Boolean, dark: Boolean, onClick: () -> Unit) {
     }
 }
 
+
 @Composable
-private fun Screen(onModeChanged: (Int) -> Unit) {
+private fun FoldingTitle(
+    scroll: androidx.compose.foundation.ScrollState,
+    title: String,
+    dark: Boolean,
+    onBack: (() -> Unit)? = null,
+    blurEnabled: Boolean = true
+) {
+    val frac = (scroll.value / 220f).coerceIn(0f, 1f)
+    val bg = if (dark) Color(0xFF000000) else Color(0xFFFFFFFF)
+    val fg = if (dark) Color(0xFFFFFFFF) else Color(0xFF000000)
+
+    // 大标题：越往下滚越模糊、越淡
+    val bigAlpha = (1f - frac * 1.8f).coerceIn(0f, 1f)
+    val bigBlur = (frac * 9f)
+    // 小标题：从模糊到清晰
+    val smallAlpha = ((frac - 0.45f) / 0.4f).coerceIn(0f, 1f)
+    val smallBlur = ((1f - smallAlpha) * 7f)
+
+    val height = (96f - frac * 44f).dp
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+            .background(bg)
+    ) {
+        if (onBack != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 16.dp)
+                    .clickable { onBack() }
+            ) {
+                Text(text = "←", fontSize = 22.sp, color = fg)
+            }
+        }
+        // 大标题，左上角
+        Text(
+            text = title,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            color = fg,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = if (onBack != null) 20.dp else 20.dp, bottom = 8.dp)
+                .alpha(bigAlpha)
+                .then(if (blurEnabled) Modifier.blur(bigBlur.dp) else Modifier)
+        )
+        // 小标题，正中
+        Text(
+            text = title,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Medium,
+            color = fg,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .alpha(smallAlpha)
+                .then(if (blurEnabled) Modifier.blur(smallBlur.dp) else Modifier)
+        )
+    }
+}
+
+@Composable
+private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit = {}) {
     val ctx = LocalContext.current
 
     var text by remember { mutableStateOf(Prefs.text(ctx)) }
@@ -390,6 +481,11 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
     var singleChar by remember { mutableStateOf(Prefs.singleChar(ctx)) }
     var textColor by remember { mutableStateOf(Prefs.textColor(ctx)) }
     var showColor by remember { mutableStateOf(false) }
+    var showPalette by remember { mutableStateOf(false) }
+    var blurTitle by remember { mutableStateOf(Prefs.blurTitle(ctx)) }
+    var predictBack by remember { mutableStateOf(Prefs.predictBack(ctx)) }
+    var uiScale by remember { mutableStateOf(Prefs.uiScale(ctx)) }
+    var editKind by remember { mutableStateOf(0) }   // 1 数量 2 速度 3 大小 4 缩放
     var running by remember { mutableStateOf(Prefs.running(ctx)) }
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(ctx)) }
     var themeMode by remember { mutableStateOf(Prefs.themeMode(ctx)) }
@@ -400,6 +496,11 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
     var showAdb by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf(0) }          // 0 = 主页，1 = 关于
     var latestUrl by remember { mutableStateOf("") }
+    // 关于页里做返回手势 → 回主页，别直接退出应用
+    androidx.activity.compose.BackHandler(enabled = page != 0) {
+        page = 0
+    }
+
     val currentVersion = try {
         ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "0"
     } catch (t: Throwable) { "0" }
@@ -552,24 +653,18 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
         }.start()
     }
 
-    Scaffold { pad ->
+    val homeScroll = rememberScrollState()
+    Scaffold(
+        topBar = { FoldingTitle(homeScroll, "Miku", dark, blurEnabled = blurTitle) }
+    ) { pad ->
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(pad)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(homeScroll)
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 28.dp)
         ) {
-            // 顶部大标题（照你「桌面弹窗」那页的排版：大标题 + 一行说明）
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp, bottom = 10.dp, start = 4.dp)
-            ) {
-                Text(text = "Miku", fontSize = 30.sp, fontWeight = FontWeight.Bold)
-            }
-
             WorkingCard(running = running, dark = dark) {
                 if (running) stopOverlay()
                 else if (!canOverlay) showPerm = true
@@ -586,10 +681,10 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                     endActions = { Text(if (canOverlay) "已开启" else "去授权") }
                 )
                 BasicComponent(
-                    title = "主题颜色",
-                    summary = "跟随系统 / 浅色 / 深色 / 莫奈",
-                    onClick = { showTheme = true },
-                    endActions = { Text(modeName(themeMode)) }
+                    title = "主题",
+                    summary = "颜色、标题模糊、返回手势、调整大小",
+                    onClick = { page = 2 },
+                    endActions = { Text("›") }
                 )
                 BasicComponent(
                     title = "关于",
@@ -665,14 +760,16 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
             Card(insideMargin = PaddingValues(0.dp)) {
                 BasicComponent(
                     title = "飘字颜色",
-                    summary = COLOR_NAMES.getOrElse(textColor) { "雪白" },
+                    summary = if (textColor == 6) "自定义颜色"
+                    else COLOR_NAMES.getOrElse(textColor) { "雪白" },
                     onClick = { showColor = true },
-                    endActions = { Text(COLOR_NAMES.getOrElse(textColor) { "雪白" }) }
+                    endActions = { Text(if (textColor == 6) "自定义" else COLOR_NAMES.getOrElse(textColor) { "雪白" }) }
                 )
             }
 
             Spacer(Modifier.height(12.dp))
 
+            Box {
             SliderPreference(
                 value = count.toFloat(),
                 onValueChange = { count = it.roundToInt() },
@@ -685,7 +782,17 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                 valueRange = 20f..110f,
                 steps = 89
             )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 24.dp, top = 6.dp)
+                    .width(120.dp)
+                    .height(34.dp)
+                    .clickable { editKind = 1 }
+            )
+        }
             Spacer(Modifier.height(12.dp))
+            Box {
             SliderPreference(
                 value = speed.toFloat(),
                 onValueChange = { speed = it.roundToInt() },
@@ -698,7 +805,17 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                 valueRange = 60f..220f,
                 steps = 159
             )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 24.dp, top = 6.dp)
+                    .width(120.dp)
+                    .height(34.dp)
+                    .clickable { editKind = 2 }
+            )
+        }
             Spacer(Modifier.height(12.dp))
+            Box {
             SliderPreference(
                 value = size.toFloat(),
                 onValueChange = { size = it.roundToInt() },
@@ -711,6 +828,15 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                 valueRange = 60f..220f,
                 steps = 159
             )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 24.dp, top = 6.dp)
+                    .width(120.dp)
+                    .height(34.dp)
+                    .clickable { editKind = 3 }
+            )
+        }
 
             Spacer(Modifier.height(8.dp))
             Card(insideMargin = PaddingValues(0.dp)) {
@@ -1166,8 +1292,273 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
                     if (idx == textColor) Text(text = "✓", fontSize = 14.sp)
                 }
             }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        showColor = false
+                        showPalette = true
+                    }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(Color(Prefs.customColor(ctx)))
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(text = "自定义颜色", fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text(text = if (textColor == 6) "✓" else "调色", fontSize = 13.sp)
+            }
             Spacer(Modifier.height(8.dp))
             DlgButton("关闭", Modifier.fillMaxWidth()) { showColor = false }
+        }
+    }
+
+    // 调色盘
+    if (showPalette) {
+        val init = Prefs.customColor(ctx)
+        val hsv0 = FloatArray(3)
+        android.graphics.Color.colorToHSV(init, hsv0)
+        var hue by remember { mutableStateOf(hsv0[0]) }
+        var sat by remember { mutableStateOf(hsv0[1] * 100f) }
+        var valv by remember { mutableStateOf(hsv0[2] * 100f) }
+        val cur = android.graphics.Color.HSVToColor(floatArrayOf(hue, sat / 100f, valv / 100f))
+
+        MikuDialog(
+            onDismiss = { showPalette = false },
+            title = "自定义颜色",
+            summary = "调好后点应用，会覆盖原来的自定义色卡"
+        ) {
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(cur))
+                )
+                Spacer(Modifier.height(10.dp))
+                SliderPreference(
+                    value = hue,
+                    onValueChange = { hue = it },
+                    onValueChangeFinished = {},
+                    title = "色相",
+                    valueText = "${hue.roundToInt()}°",
+                    valueRange = 0f..360f
+                )
+                SliderPreference(
+                    value = sat,
+                    onValueChange = { sat = it },
+                    onValueChangeFinished = {},
+                    title = "饱和度",
+                    valueText = "${sat.roundToInt()}%",
+                    valueRange = 0f..100f
+                )
+                SliderPreference(
+                    value = valv,
+                    onValueChange = { valv = it },
+                    onValueChangeFinished = {},
+                    title = "亮度",
+                    valueText = "${valv.roundToInt()}%",
+                    valueRange = 0f..100f
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DlgButton("应用", Modifier.weight(1f), primary = true) {
+                        Prefs.setCustomColor(ctx, cur)
+                        textColor = 6
+                        Prefs.setTextColor(ctx, 6)
+                        showPalette = false
+                        push()
+                    }
+                    DlgButton("重置", Modifier.weight(1f)) {
+                        Prefs.setCustomColor(ctx, 0xFFFFFFFF.toInt())
+                        textColor = 0
+                        Prefs.setTextColor(ctx, 0)
+                        showPalette = false
+                        push()
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                DlgButton("关闭", Modifier.fillMaxWidth()) { showPalette = false }
+            }
+        }
+    }
+
+    // 手动输入数值
+    if (editKind != 0) {
+        val t = when (editKind) { 1 -> "数量"; 2 -> "速度"; 3 -> "大小"; else -> "调整大小" }
+        val initV = when (editKind) { 1 -> count; 2 -> speed; 3 -> size; else -> uiScale }
+        val minV = when (editKind) { 1 -> 20; 4 -> 70; else -> 60 }
+        val maxV = when (editKind) { 1 -> 110; 4 -> 150; else -> 220 }
+        val unit = when (editKind) { 1 -> "个"; else -> "%" }
+        var buf by remember(editKind) { mutableStateOf(initV.toString()) }
+
+        MikuDialog(
+            onDismiss = { editKind = 0 },
+            title = "手动输入",
+            summary = "$t：$minV - $maxV$unit"
+        ) {
+            Column {
+                TextField(
+                    value = buf,
+                    onValueChange = { v -> buf = v.filter { it.isDigit() }.take(3) },
+                    label = t
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DlgButton("确定", Modifier.weight(1f), primary = true) {
+                        val v = buf.toIntOrNull()
+                        if (v == null || v < minV || v > maxV) {
+                            toast(ctx, "请输入 $minV - $maxV 之间的数值")
+                        } else {
+                            when (editKind) {
+                                1 -> { count = v; Prefs.setCount(ctx, v) }
+                                2 -> { speed = v; Prefs.setSpeedRaw(ctx, v) }
+                                3 -> { size = v; Prefs.setSizeRaw(ctx, v) }
+                                else -> {
+                                    uiScale = v
+                                    Prefs.setUiScale(ctx, v)
+                                    onScaleChanged(v)
+                                }
+                            }
+                            editKind = 0
+                            push()
+                        }
+                    }
+                    DlgButton("取消", Modifier.weight(1f)) { editKind = 0 }
+                }
+            }
+        }
+    }
+
+    // 主题页（整页覆盖，排版参考系统设置）
+    androidx.compose.animation.AnimatedVisibility(
+        visible = page == 2,
+        enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) +
+                androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) +
+                androidx.compose.animation.fadeOut()
+    ) {
+        run {
+            var seg by remember { mutableStateOf(if (themeMode == 3) 0 else themeMode) }
+            var localScale by remember { mutableStateOf(Prefs.uiScale(ctx)) }
+            val themeScroll = rememberScrollState()
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(if (dark) Color(0xFF000000) else Color(0xFFFFFFFF))
+            ) {
+                FoldingTitle(
+                    scroll = themeScroll,
+                    title = "主题",
+                    dark = dark,
+                    onBack = { page = 0 },
+                    blurEnabled = blurTitle
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(themeScroll)
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 12.dp, bottom = 28.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("跟随系统", "浅色", "深色").forEachIndexed { idx, name ->
+                            val on = seg == idx && themeMode != 3
+                            Button(
+                                onClick = {
+                                    seg = idx
+                                    themeMode = idx
+                                    Prefs.setThemeMode(ctx, idx)
+                                    onModeChanged(idx)
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = if (on) ButtonDefaults.buttonColorsPrimary()
+                                else ButtonDefaults.buttonColors()
+                            ) {
+                                Text(text = name, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+
+                    Card(insideMargin = PaddingValues(0.dp)) {
+                        SwitchPreference(
+                            title = "启用莫奈取色",
+                            summary = "跟随壁纸取色（需要 Android 12 及以上）",
+                            checked = themeMode == 3,
+                            onCheckedChange = { v ->
+                                if (v) {
+                                    themeMode = 3
+                                    Prefs.setThemeMode(ctx, 3)
+                                    onModeChanged(3)
+                                } else {
+                                    themeMode = seg
+                                    Prefs.setThemeMode(ctx, seg)
+                                    onModeChanged(seg)
+                                }
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+
+                    Card(insideMargin = PaddingValues(0.dp)) {
+                        SwitchPreference(
+                            title = "标题模糊",
+                            summary = "滑动时大标题模糊消散，居中小标题由模糊变清晰",
+                            checked = blurTitle,
+                            onCheckedChange = {
+                                blurTitle = it
+                                Prefs.setBlurTitle(ctx, it)
+                            }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(if (dark) Color(0xFF262626) else Color(0xFFEDEDED))
+                        )
+                        SwitchPreference(
+                            title = "预测性返回手势",
+                            summary = "在主题页、关于页做返回手势时退回主页，而不是退出应用",
+                            checked = predictBack,
+                            onCheckedChange = {
+                                predictBack = it
+                                Prefs.setPredictBack(ctx, it)
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+
+                    Card(insideMargin = PaddingValues(0.dp)) {
+                        BasicComponent(
+                            title = "调整大小",
+                            summary = "调整全局字号比例",
+                            onClick = { editKind = 4 },
+                            endActions = { Text("${localScale}%") }
+                        )
+                        SliderPreference(
+                            value = localScale.toFloat(),
+                            onValueChange = { v ->
+                                localScale = v.roundToInt()
+                                Prefs.setUiScale(ctx, localScale)
+                                onScaleChanged(localScale)
+                            },
+                            onValueChangeFinished = {},
+                            title = "",
+                            valueText = "",
+                            valueRange = 70f..150f
+                        )
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    DlgButton("返回", Modifier.fillMaxWidth()) { page = 0 }
+                }
+            }
         }
     }
 
@@ -1201,17 +1592,25 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
             }
         }
 
-        Box(
+        val aboutScroll = rememberScrollState()
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(if (dark) Color(0xFF000000) else Color(0xFFFFFFFF))
         ) {
+            FoldingTitle(
+                scroll = aboutScroll,
+                title = "关于",
+                dark = dark,
+                onBack = { page = 0 },
+                blurEnabled = blurTitle
+            )
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .weight(1f)
+                    .verticalScroll(aboutScroll)
                     .padding(horizontal = 16.dp)
-                    .padding(top = 24.dp, bottom = 28.dp)
+                    .padding(top = 12.dp, bottom = 28.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(
@@ -1239,13 +1638,17 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
 
                 Spacer(Modifier.height(12.dp))
 
-                // 功能
+                // 功能（分组小标题，卡片外面左上角）
+                Text(
+                    text = "功能",
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(start = 16.dp, bottom = 6.dp)
+                )
                 Card(insideMargin = PaddingValues(0.dp)) {
-                    BasicComponent(title = "功能", summary = "")
                     BasicComponent(title = "文字飘雪", summary = "每个字单独飘，可旋转、翻转、倾斜")
                     BasicComponent(title = "图片飘雪", summary = "最多 8 张，自动缩放，可只飘图片")
                     BasicComponent(title = "数量 / 速度 / 大小", summary = "三个滑杆实时调整")
-                    BasicComponent(title = "主题颜色", summary = "跟随系统、浅色、深色、莫奈取色")
+                    BasicComponent(title = "主题", summary = "颜色、标题模糊、返回手势、调整大小")
                     BasicComponent(title = "授权通道", summary = "Shizuku / Root / ADB 任选一条")
                     BasicComponent(title = "不进截图", summary = "需 root 或 ADB 授权后才能开启")
                 }
@@ -1254,7 +1657,7 @@ private fun Screen(onModeChanged: (Int) -> Unit) {
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("6.4") })
+                    BasicComponent(title = "版本", endActions = { Text("6.7") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
