@@ -485,10 +485,10 @@ private fun FoldingTitle(
         Modifier.hazeEffect(
             state = haze,
             style = HazeStyle(
-                backgroundColor = bg.copy(alpha = 0.72f),
+                backgroundColor = bg.copy(alpha = 0.88f),
                 tints = emptyList(),
-                blurRadius = 22.dp,
-                noiseFactor = 0.02f
+                blurRadius = 14.dp,
+                noiseFactor = 0.05f
             )
         )
     } else Modifier.background(bg)
@@ -1856,7 +1856,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.12") })
+                    BasicComponent(title = "版本", endActions = { Text("7.13") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
