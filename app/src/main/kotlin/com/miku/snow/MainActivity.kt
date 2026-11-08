@@ -88,6 +88,7 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -264,6 +265,9 @@ private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
 private data class LogEntry(val code: Int, val version: String, val items: List<String>)
 
 private val CHANGELOG = listOf(
+    LogEntry(77, "7.6.35", listOf(
+        "大卡片按压改为 Miuix 原生 Tilt 反馈（与 KernelSU 首页同一套动画），不再自绘倾斜"
+    )),
     LogEntry(76, "7.6.34", listOf(
         "主页大卡片新增长按倾斜动画：按住时卡片随手按压位置轻微倾斜并缩小，松手弹性回正",
         "版本号改为 7.6.34"
@@ -417,46 +421,6 @@ private fun toast(ctx: Context, msg: String) {
 // 这张卡照的是 KernelSU manager 的 HomeMiuix.kt StatusCard：
 // 浅色 #DFFAE4 / 深色 #1A3825 底，右下 110dp 绿色 CheckCircleOutline，左上 22sp「工作中」。
 @Composable
-private fun tiltOnPress(): Modifier {
-    var pressed by remember { mutableStateOf(false) }
-    var rx by remember { mutableFloatStateOf(0f) }
-    var ry by remember { mutableFloatStateOf(0f) }
-    val animRx by animateFloatAsState(
-        targetValue = if (pressed) rx else 0f,
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow)
-    )
-    val animRy by animateFloatAsState(
-        targetValue = if (pressed) ry else 0f,
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow)
-    )
-    val animScale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)
-    )
-    return Modifier
-        .graphicsLayer {
-            rotationX = animRx
-            rotationY = animRy
-            scaleX = animScale
-            scaleY = animScale
-            cameraDistance = 18f * density
-        }
-        .pointerInput(Unit) {
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                val w = size.width.toFloat().coerceAtLeast(1f)
-                val h = size.height.toFloat().coerceAtLeast(1f)
-                // 手指按在哪儿，卡片就往哪儿轻微倾斜
-                rx = -((down.position.y / h) - 0.5f) * 14f
-                ry = ((down.position.x / w) - 0.5f) * 14f
-                pressed = true
-                waitForUpOrCancellation()
-                pressed = false
-            }
-        }
-}
-
-@Composable
 private fun WorkingCard(running: Boolean, dark: Boolean, onClick: () -> Unit) {
     val bg = when {
         running && dark -> Color(0xFF1A3825)
@@ -469,11 +433,11 @@ private fun WorkingCard(running: Boolean, dark: Boolean, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(158.dp)
-            .then(tiltOnPress()),
+            .height(158.dp),
         colors = CardDefaults.defaultColors(color = bg),
         onClick = onClick,
-        showIndication = true
+        showIndication = true,
+        pressFeedbackType = PressFeedbackType.Tilt
     ) {
         Box(Modifier.fillMaxSize()) {
             Box(
@@ -1965,7 +1929,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.6.34") })
+                    BasicComponent(title = "版本", endActions = { Text("7.6.35") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
