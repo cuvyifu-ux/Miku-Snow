@@ -128,6 +128,15 @@ public final class Prefs {
         sp(c).edit().putBoolean("no_text", v).apply();
     }
 
+    /** 顶栏毛玻璃开关 */
+    public static boolean barBlur(Context c) {
+        return sp(c).getBoolean("bar_blur", true);
+    }
+
+    public static void setBarBlur(Context c, boolean v) {
+        sp(c).edit().putBoolean("bar_blur", v).apply();
+    }
+
     /** 用户是否主动选择用 Shizuku（没选过就完全不碰它，避免乱弹授权） */
     public static boolean shizukuOptIn(Context c) {
         return sp(c).getBoolean("shizuku_opt_in", false);
@@ -175,11 +184,11 @@ public final class Prefs {
 
     /** 界面缩放（百分比，作用于字号） */
     public static int uiScale(Context c) {
-        return Math.max(70, Math.min(150, sp(c).getInt("ui_scale", 100)));
+        return Math.max(80, Math.min(150, sp(c).getInt("ui_scale", 100)));
     }
 
     public static void setUiScale(Context c, int v) {
-        sp(c).edit().putInt("ui_scale", Math.max(70, Math.min(150, v))).apply();
+        sp(c).edit().putInt("ui_scale", Math.max(80, Math.min(150, v))).apply();
     }
 
     /** 飘字颜色：0 雪白 1 冰蓝 2 樱花粉 3 薄荷绿 4 暖金 5 紫 */

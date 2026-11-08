@@ -35,6 +35,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import dev.chrisbanes.haze.HazeState
@@ -465,9 +468,12 @@ private fun FoldingTitle(
     onBack: (() -> Unit)? = null,
     blurEnabled: Boolean = true,
     haze: HazeState? = null,
+    blurBar: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    val frac = (scroll.value / 220f).coerceIn(0f, 1f)
+    // 阈值按 dp 算，字号放大后仍然按同样的距离收起
+    val collapsePx = with(LocalDensity.current) { 120.dp.toPx() }
+    val frac = (scroll.value / collapsePx).coerceIn(0f, 1f)
     val bg = if (dark) Color(0xFF000000) else Color(0xFFFFFFFF)
     val fg = if (dark) Color(0xFFFFFFFF) else Color(0xFF000000)
 
@@ -481,14 +487,15 @@ private fun FoldingTitle(
     val height = (96f - frac * 44f).dp
 
     // 毛玻璃：把从顶栏下面滑过去的页面内容取过来做高斯模糊
-    val glass = if (haze != null) {
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val glass = if (haze != null && blurBar) {
         Modifier.hazeEffect(
             state = haze,
             style = HazeStyle(
-                backgroundColor = bg.copy(alpha = 0.88f),
+                backgroundColor = bg.copy(alpha = 0.93f),
                 tints = emptyList(),
-                blurRadius = 14.dp,
-                noiseFactor = 0.05f
+                blurRadius = 16.dp,
+                noiseFactor = 0.04f
             )
         )
     } else Modifier.background(bg)
@@ -496,9 +503,14 @@ private fun FoldingTitle(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(height)
+            .height(height + statusTop)
             .then(glass)
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = statusTop)
+        ) {
         if (onBack != null) {
             Box(
                 modifier = Modifier
@@ -532,6 +544,7 @@ private fun FoldingTitle(
                 .alpha(smallAlpha)
                 .then(if (blurEnabled) Modifier.blur(smallBlur.dp) else Modifier)
         )
+        }
     }
 }
 
@@ -558,6 +571,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var confirmShizuku by remember { mutableStateOf(false) }
     var logOnlyNew by remember { mutableStateOf(false) }
     var blurTitle by remember { mutableStateOf(Prefs.blurTitle(ctx)) }
+    var barBlur by remember { mutableStateOf(Prefs.barBlur(ctx)) }
     var predictBack by remember { mutableStateOf(Prefs.predictBack(ctx)) }
     var uiScale by remember { mutableStateOf(Prefs.uiScale(ctx)) }
     var editKind by remember { mutableStateOf(0) }   // 1 数量 2 速度 3 大小 4 缩放
@@ -1119,9 +1133,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
             }
 
         }
-        Box(Modifier.fillMaxWidth().padding(top = pad.calculateTopPadding())) {
-            FoldingTitle(homeScroll, "Miku", dark, blurEnabled = blurTitle, haze = homeHaze)
-        }
+        FoldingTitle(homeScroll, "Miku", dark, blurEnabled = blurTitle, haze = homeHaze, blurBar = barBlur)
         }
 
         // 下面这些弹窗必须留在 Scaffold 内容域里，OverlayDialog 依赖它提供的 CompositionLocal
@@ -1355,25 +1367,27 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                     .padding(horizontal = 16.dp, vertical = 18.dp),
                 insideMargin = PaddingValues(14.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Column {
                     Text(
                         text = autoNew,
                         fontSize = 13.sp,
                         maxLines = 2,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.width(12.dp))
-                    Button(
-                        onClick = {
-                            autoNew = ""
-                            page = 1
-                            pendingCheck = true
-                        },
-                        modifier = Modifier
-                            .height(38.dp)
-                            .widthIn(min = 76.dp)
-                    ) { Text("查看", maxLines = 1) }
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Button(
+                            onClick = {
+                                autoNew = ""
+                                page = 1
+                                pendingCheck = true
+                            },
+                            modifier = Modifier.height(36.dp)
+                        ) { Text("查看", maxLines = 1) }
+                    }
                 }
             }
         }
@@ -1583,7 +1597,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     if (editKind != 0) {
         val t = when (editKind) { 1 -> "数量"; 2 -> "速度"; 3 -> "大小"; else -> "调整大小" }
         val initV = when (editKind) { 1 -> count; 2 -> speed; 3 -> size; else -> uiScale }
-        val minV = when (editKind) { 1 -> 20; 4 -> 70; else -> 60 }
+        val minV = when (editKind) { 1 -> 20; 4 -> 80; else -> 60 }
         val maxV = when (editKind) { 1 -> 110; 4 -> 150; else -> 220 }
         val unit = when (editKind) { 1 -> "个"; else -> "%" }
         var buf by remember(editKind) { mutableStateOf(initV.toString()) }
@@ -1639,9 +1653,19 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     ) {
         run {
             var seg by remember { mutableStateOf(if (themeMode == 3) 0 else themeMode) }
-            var localScale by remember { mutableStateOf(Prefs.uiScale(ctx)) }
+            // 缩放只走 uiScale 这一份状态，手动输入和滑块都改它，界面才不会显示旧值
+            val scalePresets = listOf(80, 100, 125, 150)
+            fun nearestIdx(v: Int): Int {
+                var best = 0
+                var d = Int.MAX_VALUE
+                scalePresets.forEachIndexed { i, p -> if (Math.abs(p - v) < d) { d = Math.abs(p - v); best = i } }
+                return best
+            }
+            var scalePos by remember { mutableStateOf(nearestIdx(uiScale).toFloat()) }
+            var scaleDragging by remember { mutableStateOf(false) }
             val themeScroll = rememberScrollState()
             val themeHaze = rememberHazeState()
+            val themeStatusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
             Box(
                 modifier = Modifier
@@ -1657,7 +1681,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                         .padding(horizontal = 16.dp)
                         .padding(top = 12.dp, bottom = 28.dp)
                 ) {
-                    Spacer(Modifier.height(96.dp))
+                    Spacer(Modifier.height(96.dp + themeStatusTop))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("跟随系统", "浅色", "深色").forEachIndexed { idx, name ->
                             val on = seg == idx && themeMode != 3
@@ -1715,6 +1739,21 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                                 .background(if (dark) Color(0xFF262626) else Color(0xFFEDEDED))
                         )
                         SwitchPreference(
+                            title = "顶栏模糊",
+                            summary = "标题栏和状态栏对下方内容做高斯模糊",
+                            checked = barBlur,
+                            onCheckedChange = {
+                                barBlur = it
+                                Prefs.setBarBlur(ctx, it)
+                            }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(if (dark) Color(0xFF262626) else Color(0xFFEDEDED))
+                        )
+                        SwitchPreference(
                             title = "预测性返回手势",
                             summary = "在主题页、关于页做返回手势时退回主页，而不是退出应用",
                             checked = predictBack,
@@ -1731,20 +1770,35 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                             title = "调整大小",
                             summary = "调整全局字号比例",
                             onClick = { editKind = 4 },
-                            endActions = { Text("${localScale}%") }
+                            endActions = {
+                                val shown = if (scaleDragging) scalePresets[scalePos.roundToInt().coerceIn(0, 3)] else uiScale
+                                Text("${shown}%")
+                            }
                         )
+                        // 拖动中只改滑块位置，松手才真正应用；四档：80 / 100 / 125 / 150
                         SliderPreference(
-                            value = localScale.toFloat(),
+                            value = scalePos,
                             onValueChange = { v ->
-                                localScale = v.roundToInt()
-                                Prefs.setUiScale(ctx, localScale)
-                                onScaleChanged(localScale)
+                                scaleDragging = true
+                                scalePos = v
                             },
-                            onValueChangeFinished = {},
+                            onValueChangeFinished = {
+                                scaleDragging = false
+                                val idx = scalePos.roundToInt().coerceIn(0, 3)
+                                val v = scalePresets[idx]
+                                uiScale = v
+                                Prefs.setUiScale(ctx, v)
+                                onScaleChanged(v)
+                            },
                             title = "",
                             valueText = "",
-                            valueRange = 70f..150f
+                            valueRange = 0f..3f,
+                            steps = 3
                         )
+                        // 手输数值后把滑块位置对齐到最近的档
+                        LaunchedEffect(uiScale) {
+                            scalePos = nearestIdx(uiScale).toFloat()
+                        }
                     }
                     Spacer(Modifier.height(20.dp))
                     DlgButton("返回", Modifier.fillMaxWidth()) { page = 0 }
@@ -1755,7 +1809,8 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                     dark = dark,
                     onBack = { page = 0 },
                     blurEnabled = blurTitle,
-                    haze = themeHaze
+                    haze = themeHaze,
+                    blurBar = barBlur
                 )
             }
         }
@@ -1796,6 +1851,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
         val aboutScroll = rememberScrollState()
         val aboutHaze = rememberHazeState()
+        val aboutStatusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1810,7 +1866,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                     .padding(horizontal = 16.dp)
                     .padding(top = 12.dp, bottom = 28.dp)
             ) {
-                Spacer(Modifier.height(96.dp))
+                Spacer(Modifier.height(96.dp + aboutStatusTop))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(
                         painter = painterResource(R.drawable.app_icon),
@@ -1856,7 +1912,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.13") })
+                    BasicComponent(title = "版本", endActions = { Text("7.14") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
@@ -1925,7 +1981,8 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 dark = dark,
                 onBack = { page = 0 },
                 blurEnabled = blurTitle,
-                haze = aboutHaze
+                haze = aboutHaze,
+                blurBar = barBlur
             )
         }
     }
