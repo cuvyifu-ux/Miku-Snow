@@ -125,13 +125,14 @@ public class UpdateChecker {
             }
         }
         String v = rest.substring(0, end);
+        while (v.endsWith(".")) v = v.substring(0, v.length() - 1);
         return v.isEmpty() ? null : v;
     }
 
     /** 逐段比数字，4.10 > 4.9 */
     public static int compare(String a, String b) {
-        String[] x = a.split("\\.");
-        String[] y = b.split("\\.");
+        String[] x = a.replaceAll("\\.+$", "").split("\\.");
+        String[] y = b.replaceAll("\\.+$", "").split("\\.");
         int n = Math.max(x.length, y.length);
         for (int i = 0; i < n; i++) {
             int xi = i < x.length ? parseIntSafe(x[i]) : 0;
