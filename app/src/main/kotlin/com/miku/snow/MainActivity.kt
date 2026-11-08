@@ -265,6 +265,9 @@ private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
 private data class LogEntry(val code: Int, val version: String, val items: List<String>)
 
 private val CHANGELOG = listOf(
+    LogEntry(78, "7.6.36", listOf(
+        "修复检查更新把老版本 7.14 当成新版本（版本方案变了，改为按 Release 发布时间取最新）"
+    )),
     LogEntry(77, "7.6.35", listOf(
         "大卡片按压改为 Miuix 原生 Tilt 反馈（与 KernelSU 首页同一套动画），不再自绘倾斜"
     )),
@@ -1929,7 +1932,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.6.35") })
+                    BasicComponent(title = "版本", endActions = { Text("7.6.36") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",

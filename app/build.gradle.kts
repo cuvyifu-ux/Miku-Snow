@@ -11,8 +11,8 @@ android {
         applicationId = "com.miku.snow"
         minSdk = 26
         targetSdk = 33
-        versionCode = 77
-        versionName = "7.6.35"
+        versionCode = 78
+        versionName = "7.6.36"
     }
 
     buildTypes {

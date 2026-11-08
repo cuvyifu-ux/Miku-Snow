@@ -9,8 +9,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * 检查更新：读开源页的 releases，按 APK 文件名里的版本后缀比较（Miku-4.6.apk -> 4.6）。
- * 只看名字，不看发布日期，谁的后缀大就用谁。
+ * 检查更新：读开源页的 releases，取「发布时间最新」的那个版本里的 APK。
+ * 版本命名换过方案（7.14 -> 7.6.35），纯按版本号大小比会把老版本当成新版，所以以发布时间为准。
  */
 public class UpdateChecker {
 
@@ -58,6 +58,7 @@ public class UpdateChecker {
             JSONArray arr = new JSONArray(body);
 
             String best = null;
+            String bestPub = "";
             String bestUrl = "";
             String bestName = "";
             for (int i = 0; i < arr.length(); i++) {
@@ -72,8 +73,14 @@ public class UpdateChecker {
                     if (!name.toLowerCase().endsWith(".apk")) continue;
                     String v = versionFromName(name);
                     if (v == null) continue;
-                    if (best == null || compare(v, best) > 0) {
+                    String pub = rel.optString("published_at", rel.optString("created_at", ""));
+                    // 先比发布时间；时间相同再按版本号段比较
+                    boolean better = best == null
+                            || pub.compareTo(bestPub) > 0
+                            || (pub.equals(bestPub) && compare(v, best) > 0);
+                    if (better) {
                         best = v;
+                        bestPub = pub;
                         bestName = name;
                         bestUrl = a.optString("browser_download_url", "");
                     }
@@ -85,15 +92,11 @@ public class UpdateChecker {
                 return r;
             }
 
-            int cmp = compare(best, currentVersion);
-            if (cmp > 0) {
+            // 只是名字不同就是新版（版本方案变更后没法再靠比大小判断）
+            if (!best.equals(currentVersion.trim())) {
                 r.hasUpdate = true;
                 r.url = bestUrl;
                 r.message = "发现新版本 " + best + "（当前 " + currentVersion + "）：" + bestName;
-            } else if (cmp < 0) {
-                // 装的是比发布版更高的版本，说明是测试包
-                r.testBuild = true;
-                r.message = "当前版本为测试版本，可能存在稳定性、安全性等问题，请及时更新到正式版";
             } else {
                 r.message = "已是最新版本（" + currentVersion + "）";
             }
