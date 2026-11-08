@@ -17,6 +17,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -59,7 +62,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -256,6 +264,10 @@ private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
 private data class LogEntry(val code: Int, val version: String, val items: List<String>)
 
 private val CHANGELOG = listOf(
+    LogEntry(76, "7.6.34", listOf(
+        "主页大卡片新增长按倾斜动画：按住时卡片随手按压位置轻微倾斜并缩小，松手弹性回正",
+        "版本号改为 7.6.34"
+    )),
     LogEntry(55, "6.4", listOf(
         "修复关于页打开即闪退（启动图标用了自适应图标 XML，Compose 不认）",
         "新增飘字颜色：雪白 / 冰蓝 / 樱花粉 / 薄荷绿 / 暖金 / 紫"
@@ -405,6 +417,46 @@ private fun toast(ctx: Context, msg: String) {
 // 这张卡照的是 KernelSU manager 的 HomeMiuix.kt StatusCard：
 // 浅色 #DFFAE4 / 深色 #1A3825 底，右下 110dp 绿色 CheckCircleOutline，左上 22sp「工作中」。
 @Composable
+private fun tiltOnPress(): Modifier {
+    var pressed by remember { mutableStateOf(false) }
+    var rx by remember { mutableFloatStateOf(0f) }
+    var ry by remember { mutableFloatStateOf(0f) }
+    val animRx by animateFloatAsState(
+        targetValue = if (pressed) rx else 0f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow)
+    )
+    val animRy by animateFloatAsState(
+        targetValue = if (pressed) ry else 0f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow)
+    )
+    val animScale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)
+    )
+    return Modifier
+        .graphicsLayer {
+            rotationX = animRx
+            rotationY = animRy
+            scaleX = animScale
+            scaleY = animScale
+            cameraDistance = 18f * density
+        }
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val w = size.width.toFloat().coerceAtLeast(1f)
+                val h = size.height.toFloat().coerceAtLeast(1f)
+                // 手指按在哪儿，卡片就往哪儿轻微倾斜
+                rx = -((down.position.y / h) - 0.5f) * 14f
+                ry = ((down.position.x / w) - 0.5f) * 14f
+                pressed = true
+                waitForUpOrCancellation()
+                pressed = false
+            }
+        }
+}
+
+@Composable
 private fun WorkingCard(running: Boolean, dark: Boolean, onClick: () -> Unit) {
     val bg = when {
         running && dark -> Color(0xFF1A3825)
@@ -417,7 +469,8 @@ private fun WorkingCard(running: Boolean, dark: Boolean, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(158.dp),
+            .height(158.dp)
+            .then(tiltOnPress()),
         colors = CardDefaults.defaultColors(color = bg),
         onClick = onClick,
         showIndication = true
@@ -1912,7 +1965,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.14") })
+                    BasicComponent(title = "版本", endActions = { Text("7.6.34") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
