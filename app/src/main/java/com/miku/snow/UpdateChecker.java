@@ -19,6 +19,7 @@ public class UpdateChecker {
         public boolean testBuild;      // 本地版本比发布版还高
         public String message = "";
         public String url = "";
+        public String version = "";
     }
 
     public static Result check(String repoWebUrl, String currentVersion) {
@@ -87,6 +88,7 @@ public class UpdateChecker {
                 }
             }
 
+            r.version = best;
             if (best == null) {
                 r.message = "开源页还没有可下载的安装包";
                 return r;

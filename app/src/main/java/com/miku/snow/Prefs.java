@@ -128,6 +128,15 @@ public final class Prefs {
         sp(c).edit().putBoolean("no_text", v).apply();
     }
 
+    /** 用户点过「不再提示」的更新版本号，同一个版本不再弹浮条 */
+    public static String updateMuted(Context c) {
+        return sp(c).getString("update_muted", "");
+    }
+
+    public static void setUpdateMuted(Context c, String v) {
+        sp(c).edit().putString("update_muted", v == null ? "" : v).apply();
+    }
+
     /** 顶栏毛玻璃开关 */
     public static boolean barBlur(Context c) {
         return sp(c).getBoolean("bar_blur", true);

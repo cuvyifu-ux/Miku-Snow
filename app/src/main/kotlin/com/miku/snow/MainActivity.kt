@@ -265,6 +265,11 @@ private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
 private data class LogEntry(val code: Int, val version: String, val items: List<String>)
 
 private val CHANGELOG = listOf(
+    LogEntry(81, "7.15.64", listOf(
+        "主页内容改为从状态栏底下穿过，状态栏和顶栏共用同一块毛玻璃",
+        "顶栏模糊强度调轻（半径 16dp → 11dp），不再糊成一团",
+        "更新浮条新增「不再提示」，同一版本不再反复冒出"
+    )),
     LogEntry(80, "7.15.63", listOf(
         "版本号改为 7.15.63"
     )),
@@ -518,10 +523,10 @@ private fun FoldingTitle(
         Modifier.hazeEffect(
             state = haze,
             style = HazeStyle(
-                backgroundColor = bg.copy(alpha = 0.93f),
+                backgroundColor = bg.copy(alpha = 0.92f),
                 tints = emptyList(),
-                blurRadius = 16.dp,
-                noiseFactor = 0.04f
+                blurRadius = 11.dp,
+                noiseFactor = 0.03f
             )
         )
     } else Modifier.background(bg)
@@ -673,6 +678,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var hasShellPriv by remember { mutableStateOf(Priv.cachedOk() || Priv.rememberedOk(ctx)) }
     var retryTick by remember { mutableStateOf(0) }
     var autoNew by remember { mutableStateOf("") }     // 启动时自动查到的更新提示
+    var autoNewVer by remember { mutableStateOf("") }  // 浮条对应的版本号
     var pendingCheck by remember { mutableStateOf(false) }
 
     var privDetail by remember { mutableStateOf("") }
@@ -809,9 +815,12 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
         Thread {
             try {
                 val r = UpdateChecker.check(GitHubUrl, currentVersion)
-                if (r != null && r.hasUpdate) {
+                if (r != null && r.hasUpdate && r.version != Prefs.updateMuted(ctx)) {
                     val msg = r.message
-                    android.os.Handler(android.os.Looper.getMainLooper()).post { autoNew = msg }
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        autoNew = msg
+                        autoNewVer = r.version
+                    }
                 }
             } catch (t: Throwable) {
             }
@@ -827,14 +836,14 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(pad)
                 .verticalScroll(homeScroll)
                 .hazeSource(homeHaze)
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 28.dp)
+                .padding(bottom = 28.dp + pad.calculateBottomPadding())
         ) {
-            // 内容从顶栏下方开始，但滚动时会从毛玻璃下面穿过去
-            Spacer(Modifier.height(96.dp))
+            // 内容从顶栏 + 状态栏下方开始，滚动时会连状态栏一起穿过去
+            val homeStatusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            Spacer(Modifier.height(96.dp + homeStatusTop))
             WorkingCard(running = running, dark = dark) {
                 if (running) stopOverlay()
                 else if (!canOverlay) showPerm = true
@@ -1403,8 +1412,19 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                     Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Button(
+                            onClick = {
+                                if (autoNewVer.isNotEmpty()) {
+                                    Prefs.setUpdateMuted(ctx, autoNewVer)
+                                }
+                                autoNew = ""
+                            },
+                            modifier = Modifier.height(36.dp),
+                            colors = ButtonDefaults.buttonColors()
+                        ) { Text("不再提示", maxLines = 1) }
                         Button(
                             onClick = {
                                 autoNew = ""
@@ -1938,7 +1958,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.63") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.64") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
