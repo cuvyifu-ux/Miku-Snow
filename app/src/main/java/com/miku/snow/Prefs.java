@@ -137,6 +137,24 @@ public final class Prefs {
         sp(c).edit().putString("update_muted", v == null ? "" : v).apply();
     }
 
+    /** 飘雪图片是否跟随陀螺仪倾斜 */
+    public static boolean gyroTilt(Context c) {
+        return sp(c).getBoolean("gyro_tilt", false);
+    }
+
+    public static void setGyroTilt(Context c, boolean v) {
+        sp(c).edit().putBoolean("gyro_tilt", v).apply();
+    }
+
+    /** 陀螺仪倾斜方向反向 */
+    public static boolean gyroReverse(Context c) {
+        return sp(c).getBoolean("gyro_reverse", false);
+    }
+
+    public static void setGyroReverse(Context c, boolean v) {
+        sp(c).edit().putBoolean("gyro_reverse", v).apply();
+    }
+
     /** 顶栏毛玻璃开关 */
     public static boolean barBlur(Context c) {
         return sp(c).getBoolean("bar_blur", true);

@@ -482,6 +482,7 @@ public class OverlayService extends Service {
         }
         snowView.setImages(ImageStore.load(this, ImageStore.MAX_IMAGES));
         snowView.setGlyphTheme(Prefs.textColor(this));
+        snowView.setGyro(Prefs.gyroTilt(this), Prefs.gyroReverse(this));
         // 「只飘图片 / 不飘文字」在确实有图片时才生效；
         // 一张图都没导入时，屏幕上飘出来的文字直接换成提示「还没有导入图片」，
         // 这样即使一个字都没填，屏幕也不会空着。

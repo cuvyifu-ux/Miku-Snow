@@ -265,6 +265,10 @@ private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
 private data class LogEntry(val code: Int, val version: String, val items: List<String>)
 
 private val CHANGELOG = listOf(
+    LogEntry(82, "7.15.65", listOf(
+        "新增「陀螺仪倾斜」：飘雪图片跟着手机左右倾斜改变角度，最大 26°，带平滑阻尼",
+        "新增「反向」：倾斜方向和陀螺仪相反，文字不受影响"
+    )),
     LogEntry(81, "7.15.64", listOf(
         "主页内容改为从状态栏底下穿过，状态栏和顶栏共用同一块毛玻璃",
         "顶栏模糊强度调轻（半径 16dp → 11dp），不再糊成一团",
@@ -603,6 +607,8 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var logOnlyNew by remember { mutableStateOf(false) }
     var blurTitle by remember { mutableStateOf(Prefs.blurTitle(ctx)) }
     var barBlur by remember { mutableStateOf(Prefs.barBlur(ctx)) }
+    var gyroTilt by remember { mutableStateOf(Prefs.gyroTilt(ctx)) }
+    var gyroReverse by remember { mutableStateOf(Prefs.gyroReverse(ctx)) }
     var predictBack by remember { mutableStateOf(Prefs.predictBack(ctx)) }
     var uiScale by remember { mutableStateOf(Prefs.uiScale(ctx)) }
     var editKind by remember { mutableStateOf(0) }   // 1 数量 2 速度 3 大小 4 缩放
@@ -1067,6 +1073,28 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                         push()
                     }
                 )
+                SwitchPreference(
+                    title = "陀螺仪倾斜",
+                    summary = "图片跟着手机左右歪，最大 26 度（只影响图片，文字不变）",
+                    checked = gyroTilt,
+                    onCheckedChange = {
+                        gyroTilt = it
+                        Prefs.setGyroTilt(ctx, it)
+                        push()
+                    }
+                )
+                if (gyroTilt) {
+                    SwitchPreference(
+                        title = "反向",
+                        summary = "倾斜方向和陀螺仪相反",
+                        checked = gyroReverse,
+                        onCheckedChange = {
+                            gyroReverse = it
+                            Prefs.setGyroReverse(ctx, it)
+                            push()
+                        }
+                    )
+                }
             }
 
             Spacer(Modifier.height(12.dp))
@@ -1958,7 +1986,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.64") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.65") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",

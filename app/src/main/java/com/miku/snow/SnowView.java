@@ -5,6 +5,10 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.view.Choreographer;
@@ -63,6 +67,77 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
 
     private Bitmap[] images = new Bitmap[0];
     private boolean running;
+
+    // 陀螺仪：图片跟着手机左右倾斜，反向开关把角度反过来
+    private boolean gyroEnabled;
+    private boolean gyroReverse;
+    private float gyroDeg;
+    private SensorManager sensorManager;
+    private Sensor gravSensor;
+    private boolean sensorListening;
+
+    private final SensorEventListener gravListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent e) {
+            float x = e.values[0];
+            float y = e.values[1];
+            float z = e.values[2];
+            float mag = (float) Math.sqrt(x * x + y * y + z * z);
+            if (mag < 0.5f) return;
+            // 重力在屏幕平面上的横向分量 → 手机左右歪了多少度
+            float s = (-x / mag);
+            if (s > 1f) s = 1f;
+            if (s < -1f) s = -1f;
+            float deg = (float) Math.toDegrees(Math.asin(s));
+            if (deg > 26f) deg = 26f;
+            if (deg < -26f) deg = -26f;
+            if (gyroReverse) deg = -deg;
+            // 低通，避免手抖时图片乱抖
+            gyroDeg = gyroDeg * 0.82f + deg * 0.18f;
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) { }
+    };
+
+    /** 陀螺仪倾斜开关（overlay 每次 applyConfig 都会调） */
+    public void setGyro(boolean enabled, boolean reverse) {
+        gyroEnabled = enabled;
+        gyroReverse = reverse;
+        if (!enabled) {
+            gyroDeg = 0f;
+            unregisterSensor();
+        } else if (isAttachedToWindow()) {
+            registerSensor();
+        }
+    }
+
+    private void registerSensor() {
+        if (sensorListening) return;
+        try {
+            if (sensorManager == null) {
+                sensorManager = (SensorManager) getContext().getSystemService(Context.SENSOR_SERVICE);
+            }
+            if (sensorManager == null) return;
+            if (gravSensor == null) {
+                gravSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
+                if (gravSensor == null) gravSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            }
+            if (gravSensor == null) return;
+            sensorManager.registerListener(gravListener, gravSensor, SensorManager.SENSOR_DELAY_UI);
+            sensorListening = true;
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void unregisterSensor() {
+        if (!sensorListening) return;
+        try {
+            if (sensorManager != null) sensorManager.unregisterListener(gravListener);
+        } catch (Throwable ignored) {
+        }
+        sensorListening = false;
+    }
     private long lastFrameNanos;
 
     public SnowView(Context context) {
@@ -101,11 +176,13 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         start();
+        if (gyroEnabled) registerSensor();
     }
 
     @Override
     protected void onDetachedFromWindow() {
         stop();
+        unregisterSensor();
         super.onDetachedFromWindow();
     }
 
@@ -156,6 +233,7 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
             if (p.kind == SnowEngine.KIND_IMAGE && p.imageIdx < images.length) {
                 Bitmap bmp = images[p.imageIdx];
                 if (bmp != null && !bmp.isRecycled()) {
+                    if (gyroEnabled && Math.abs(gyroDeg) > 0.1f) canvas.rotate(gyroDeg);
                     canvas.scale(flipScale, 1f);
                     dst.set(-p.r, -p.r, p.r, p.r);
                     imagePaint.setAlpha(alpha);
