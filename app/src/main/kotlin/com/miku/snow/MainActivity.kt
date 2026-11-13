@@ -265,6 +265,9 @@ private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
 private data class LogEntry(val code: Int, val version: String, val items: List<String>)
 
 private val CHANGELOG = listOf(
+    LogEntry(80, "7.15.63", listOf(
+        "版本号改为 7.15.63"
+    )),
     LogEntry(79, "7.6.37", listOf(
         "修复检查更新连自己同名版本也提示更新（从文件名取版本时把.apk前的点也带上了）"
     )),
@@ -1935,7 +1938,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.6.37") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.63") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
