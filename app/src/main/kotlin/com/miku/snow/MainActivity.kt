@@ -269,6 +269,10 @@ private val CHANGELOG = listOf(
     LogEntry(83, "7.15.66", listOf(
         "修复更新浮条被裁：不再用 Miuix Card 包裹，换成圆角自绘容器，按钮完整显示并避开导航条"
     )),
+    LogEntry(85, "7.15.68", listOf(
+        "修复陀螺仪侧向飘时粒子堆在左右边缘：越过边界改从另一侧补进来，不再贴着屏幕边堆",
+        "横着飘时上下边缘都当淡出区，画面更均匀"
+    )),
     LogEntry(84, "7.15.67", listOf(
         "陀螺仪改成改变飘落方向：按重力方向真正的往左/往右/往上飘，不再只是给图片转角度",
         "文字和图片一起生效；粒子跟着方向旋转、上下边缘都能正常补粒子",
@@ -2002,7 +2006,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.67") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.68") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",

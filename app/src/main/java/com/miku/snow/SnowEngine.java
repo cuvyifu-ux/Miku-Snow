@@ -335,9 +335,21 @@ public final class SnowEngine {
             p.rot += p.rotSpeed * dt;
             p.flip += p.flipSpeed * dt;
 
-            if (p.vx != 0f || gravX != 0f) {
-                // 重力在横向上的分量越大，粒子往那个方向飘得越快
+            if (gravX != 0f) {
+                // 有重力方向时按方向横移，越过左/右边界就从另一侧补进来，不贴着屏幕边堆积
                 p.baseX += (p.vx + p.vy * gravX) * dt;
+                float margin = p.r + 8f;
+                if (p.baseX < -margin) {
+                    p.baseX = w + margin;
+                    p.y = rnd.nextFloat() * h;
+                    p.alpha = 0f;
+                } else if (p.baseX > w + margin) {
+                    p.baseX = -margin;
+                    p.y = rnd.nextFloat() * h;
+                    p.alpha = 0f;
+                }
+            } else if (p.vx != 0f) {
+                p.baseX += p.vx * dt;
                 if (p.baseX - p.r < 0f) {
                     p.baseX = p.r;
                     p.vx = -p.vx;
@@ -350,10 +362,21 @@ public final class SnowEngine {
             }
 
             float fadeZone = Math.max(1f, h * 0.12f);
-            float remain = gravY < 0f ? (p.y - p.r) : (h - (p.y + p.r));
+            float remain;
+            if (gravY < 0f) {
+                remain = p.y - p.r;
+            } else {
+                remain = h - (p.y + p.r);
+            }
+            if (Math.abs(gravY) < 0.2f) {
+                // 主要往左右飘时，上下两条边都算淡出区
+                remain = Math.min(p.y - p.r, h - (p.y + p.r));
+            }
             p.alpha = clamp(remain / fadeZone, 0f, 1f) * (p.kind == KIND_IMAGE ? 0.92f : 1f);
 
-            if (gravY < 0f ? (p.y + p.r < -4f) : (p.y - p.r > h + 4f)) {
+            if (Math.abs(gravY) < 0.2f) {
+                // 横着飘时由左右回收兜底，这里不再按上下边判断
+            } else if (gravY < 0f ? (p.y + p.r < -4f) : (p.y - p.r > h + 4f)) {
                 respawn(p);
             }
         }
