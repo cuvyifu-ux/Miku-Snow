@@ -51,6 +51,10 @@ public final class SnowEngine {
     // 陀螺仪重力方向（屏幕坐标，y 向下为正）：默认 (0,1) 就是往下飘
     private float gravX = 0f;
     private float gravY = 1f;
+    // 陀螺仪真的给出方向后，屏幕上不再有左右边界
+    private boolean freeFlow = false;
+
+    private boolean freeFlow() { return freeFlow; }
 
     /** 设置飘落方向，engine.update 里所有粒子的位移都按这个方向走 */
     public void setGravity(float gx, float gy) {
@@ -58,6 +62,7 @@ public final class SnowEngine {
         if (m < 0.0001f) return;
         gravX = gx / m;
         gravY = gy / m;
+        freeFlow = (gravX != 0f || gravY < 0.999f);
     }
 
     public float gravityX() { return gravX; }
@@ -145,10 +150,10 @@ public final class SnowEngine {
         while (ps.size() > effective) ps.remove(ps.size() - 1);
         for (P p : ps) {
             reclassify(p);
-            if (w > 0) {
+            if (w > 0 && !freeFlow()) {
                 p.baseX = clamp(p.baseX, p.r, w - p.r);
-                clampDrift(p);
             }
+            clampDrift(p);
             if (!spin) { p.rotSpeed = 0f; p.rot = 0f; }
             if (!flip) { p.flip = 0f; p.flipSpeed = 0f; }
             if (!tilt) { p.vx = 0f; p.skew = 0f; }
@@ -169,7 +174,7 @@ public final class SnowEngine {
         } else {
             for (P p : ps) {
                 applySize(p);
-                p.baseX = clamp(p.baseX, p.r, w - p.r);
+                if (!freeFlow()) p.baseX = clamp(p.baseX, p.r, w - p.r);
                 if (p.y + p.r > h + 2) respawn(p);
             }
         }
@@ -311,6 +316,26 @@ public final class SnowEngine {
         p.driftAmp = Math.min(p.driftAmp, Math.min(roomLeft, roomRight));
     }
 
+    /** 按当前流向在上风处补粒子：往右飘就从左边补，往左飘就从右边补 */
+    private void respawnFlow(P p) {
+        spawn(p, true);
+        float proj = Math.abs(gravX) - Math.abs(gravY);
+        if (proj > 0.05f) {
+            if (gravX > 0f) {
+                p.baseX = -p.r - rnd.nextFloat() * Math.max(8f, w * 0.12f);
+            } else {
+                p.baseX = w + p.r + rnd.nextFloat() * Math.max(8f, w * 0.12f);
+            }
+            p.y = rnd.nextFloat() * h;
+        } else if (gravY < 0f) {
+            p.y = h + p.r + rnd.nextFloat() * h * 0.2f;
+            p.baseX = rnd.nextFloat() * w;
+        } else {
+            p.y = -p.r - rnd.nextFloat() * h * 0.2f;
+            p.baseX = rnd.nextFloat() * w;
+        }
+    }
+
     private void respawn(P p) {
         spawn(p, true);
         if (gravY < 0f) {
@@ -335,18 +360,12 @@ public final class SnowEngine {
             p.rot += p.rotSpeed * dt;
             p.flip += p.flipSpeed * dt;
 
-            if (gravX != 0f) {
-                // 有重力方向时按方向横移，越过左/右边界就从另一侧补进来，不贴着屏幕边堆积
+            if (freeFlow()) {
+                // 有重力方向时完全按方向走，屏幕上没有「边界」：飘出去就在上风处重新补进来
                 p.baseX += (p.vx + p.vy * gravX) * dt;
-                float margin = p.r + 8f;
-                if (p.baseX < -margin) {
-                    p.baseX = w + margin;
-                    p.y = rnd.nextFloat() * h;
-                    p.alpha = 0f;
-                } else if (p.baseX > w + margin) {
-                    p.baseX = -margin;
-                    p.y = rnd.nextFloat() * h;
-                    p.alpha = 0f;
+                if (p.baseX < -p.r * 2f || p.baseX > w + p.r * 2f) {
+                    respawnFlow(p);
+                    continue;
                 }
             } else if (p.vx != 0f) {
                 p.baseX += p.vx * dt;
@@ -374,10 +393,8 @@ public final class SnowEngine {
             }
             p.alpha = clamp(remain / fadeZone, 0f, 1f) * (p.kind == KIND_IMAGE ? 0.92f : 1f);
 
-            if (Math.abs(gravY) < 0.2f) {
-                // 横着飘时由左右回收兜底，这里不再按上下边判断
-            } else if (gravY < 0f ? (p.y + p.r < -4f) : (p.y - p.r > h + 4f)) {
-                respawn(p);
+            if (p.y < -p.r * 2f || p.y > h + p.r * 2f) {
+                respawnFlow(p);
             }
         }
 
@@ -418,8 +435,14 @@ public final class SnowEngine {
                     float push = Math.min(overlap * 0.5f, 6f);
                     float pushX = push * nx;
                     float pushY = push * ny * 0.55f;
-                    a.baseX = clamp(a.baseX - pushX, a.r, w - a.r);
-                    b.baseX = clamp(b.baseX + pushX, b.r, w - b.r);
+                    if (freeFlow()) {
+                        // 陀螺仪方向下不做左右夹取，否则粒子会被推到屏幕边堆成一排
+                        a.baseX = a.baseX - pushX;
+                        b.baseX = b.baseX + pushX;
+                    } else {
+                        a.baseX = clamp(a.baseX - pushX, a.r, w - a.r);
+                        b.baseX = clamp(b.baseX + pushX, b.r, w - b.r);
+                    }
                     a.y = Math.max(-a.r * 2f, a.y - pushY);
                     b.y = Math.max(-b.r * 2f, b.y + pushY);
                     ax = x(a);
