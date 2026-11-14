@@ -82,18 +82,23 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
             float x = e.values[0];
             float y = e.values[1];
             float z = e.values[2];
-            float mag = (float) Math.sqrt(x * x + y * y + z * z);
-            if (mag < 0.5f) return;
-            // 重力在屏幕平面上的横向分量 → 手机左右歪了多少度
-            float s = (-x / mag);
-            if (s > 1f) s = 1f;
-            if (s < -1f) s = -1f;
-            float deg = (float) Math.toDegrees(Math.asin(s));
-            if (deg > 26f) deg = 26f;
-            if (deg < -26f) deg = -26f;
-            if (gyroReverse) deg = -deg;
-            // 低通，避免手抖时图片乱抖
-            gyroDeg = gyroDeg * 0.82f + deg * 0.18f;
+            // 重力在屏幕平面上的投影：手机往哪边倒，图片就往哪边转到那个角度
+            float proj = (float) Math.hypot(x, y);
+            if (proj < 1.5f) {
+                // 手机几乎平放时没有唯一的「下方」，保持上一帧角度，避免乱跳
+                return;
+            }
+            // atan2 给出 -180..180 的全向角度，不再夹在 ±26 度里
+            float deg = (float) Math.toDegrees(Math.atan2(x, -y));
+            if (deg < 0f) deg += 360f;
+            if (gyroReverse) deg = (deg + 180f) % 360f;
+            // 按最短路径平滑，跨越 0/360 边界时不会甩一整圈
+            float delta = deg - gyroDeg;
+            while (delta > 180f) delta -= 360f;
+            while (delta < -180f) delta += 360f;
+            gyroDeg = gyroDeg + delta * 0.18f;
+            if (gyroDeg < 0f) gyroDeg += 360f;
+            if (gyroDeg >= 360f) gyroDeg -= 360f;
         }
 
         @Override

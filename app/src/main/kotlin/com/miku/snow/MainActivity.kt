@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import dev.chrisbanes.haze.HazeState
@@ -265,6 +266,14 @@ private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
 private data class LogEntry(val code: Int, val version: String, val items: List<String>)
 
 private val CHANGELOG = listOf(
+    LogEntry(83, "7.15.66", listOf(
+        "修复更新浮条被裁：不再用 Miuix Card 包裹，换成圆角自绘容器，按钮完整显示并避开导航条"
+    )),
+    LogEntry(83, "7.15.66", listOf(
+        "陀螺仪倾斜改为 0-360 全向：手机转到哪个方向，图片就转到对应角度，不再限 26 度",
+        "手机平放时保持上一角度，不会乱跳；跨越 0/360 按最短路径平滑",
+        "修复更新浮条被裁掉一半（不再用 Card，按钮改成自适应背景 + 留出导航条高度）"
+    )),
     LogEntry(82, "7.15.65", listOf(
         "新增「陀螺仪倾斜」：飘雪图片跟着手机左右倾斜改变角度，最大 26°，带平滑阻尼",
         "新增「反向」：倾斜方向和陀螺仪相反，文字不受影响"
@@ -1075,7 +1084,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 )
                 SwitchPreference(
                     title = "陀螺仪倾斜",
-                    summary = "图片跟着手机左右歪，最大 26 度（只影响图片，文字不变）",
+                    summary = "图片跟着手机转到对应角度，0-360 全向无死角（只影响图片，文字不变）",
                     checked = gyroTilt,
                     onCheckedChange = {
                         gyroTilt = it
@@ -1086,7 +1095,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 if (gyroTilt) {
                     SwitchPreference(
                         title = "反向",
-                        summary = "倾斜方向和陀螺仪相反",
+                        summary = "角度整体偏移 180 度，和陀螺仪方向相反",
                         checked = gyroReverse,
                         onCheckedChange = {
                             gyroReverse = it
@@ -1423,12 +1432,18 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
     // 底部浮条：自动检查发现新版本
     if (autoNew.isNotEmpty() && page == 0) {
-        androidx.compose.ui.window.Popup(alignment = Alignment.BottomCenter) {
-            Card(
+        val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        androidx.compose.ui.window.Popup(
+            alignment = Alignment.BottomCenter,
+            properties = androidx.compose.ui.window.PopupProperties(focusable = false)
+        ) {
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 18.dp),
-                insideMargin = PaddingValues(14.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp + navBottom)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (dark) Color(0xFF262628) else Color(0xFFFFFFFF))
+                    .padding(14.dp)
             ) {
                 Column {
                     Text(
@@ -1437,7 +1452,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                         maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
@@ -1452,7 +1467,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                             },
                             modifier = Modifier.height(36.dp),
                             colors = ButtonDefaults.buttonColors()
-                        ) { Text("不再提示", maxLines = 1) }
+                        ) { Text("不再提示", maxLines = 1, fontSize = 13.sp) }
                         Button(
                             onClick = {
                                 autoNew = ""
@@ -1460,7 +1475,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                                 pendingCheck = true
                             },
                             modifier = Modifier.height(36.dp)
-                        ) { Text("查看", maxLines = 1) }
+                        ) { Text("查看", maxLines = 1, fontSize = 13.sp) }
                     }
                 }
             }
@@ -1986,7 +2001,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.65") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.66") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
