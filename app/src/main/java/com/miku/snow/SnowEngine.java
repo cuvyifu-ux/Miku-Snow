@@ -48,6 +48,20 @@ public final class SnowEngine {
     private String text = "MIKU";
     private int targetCount = 44;
     private float speedFactor = 1f;
+    // 陀螺仪重力方向（屏幕坐标，y 向下为正）：默认 (0,1) 就是往下飘
+    private float gravX = 0f;
+    private float gravY = 1f;
+
+    /** 设置飘落方向，engine.update 里所有粒子的位移都按这个方向走 */
+    public void setGravity(float gx, float gy) {
+        float m = (float) Math.hypot(gx, gy);
+        if (m < 0.0001f) return;
+        gravX = gx / m;
+        gravY = gy / m;
+    }
+
+    public float gravityX() { return gravX; }
+    public float gravityY() { return gravY; }
     private float sizeFactor = 1f;
     private boolean useImages = true;
     private boolean singleChar = false;   // false = 整段文字一起飘
@@ -299,7 +313,12 @@ public final class SnowEngine {
 
     private void respawn(P p) {
         spawn(p, true);
-        p.y = -p.r - rnd.nextFloat() * h * 0.35f;
+        if (gravY < 0f) {
+            // 手机倒过来飘时从下边缘往上补
+            p.y = h + p.r + rnd.nextFloat() * h * 0.35f;
+        } else {
+            p.y = -p.r - rnd.nextFloat() * h * 0.35f;
+        }
     }
 
     public void update(float dt) {
@@ -312,12 +331,13 @@ public final class SnowEngine {
         for (int i = 0; i < list.size(); i++) {
             P p = list.get(i);
             p.driftPhase += p.driftSpeed * dt;
-            p.y += p.vy * dt;
+            p.y += p.vy * dt * gravY;
             p.rot += p.rotSpeed * dt;
             p.flip += p.flipSpeed * dt;
 
-            if (p.vx != 0f) {
-                p.baseX += p.vx * dt;
+            if (p.vx != 0f || gravX != 0f) {
+                // 重力在横向上的分量越大，粒子往那个方向飘得越快
+                p.baseX += (p.vx + p.vy * gravX) * dt;
                 if (p.baseX - p.r < 0f) {
                     p.baseX = p.r;
                     p.vx = -p.vx;
@@ -330,10 +350,10 @@ public final class SnowEngine {
             }
 
             float fadeZone = Math.max(1f, h * 0.12f);
-            float remain = h - (p.y + p.r);
+            float remain = gravY < 0f ? (p.y - p.r) : (h - (p.y + p.r));
             p.alpha = clamp(remain / fadeZone, 0f, 1f) * (p.kind == KIND_IMAGE ? 0.92f : 1f);
 
-            if (p.y - p.r > h + 4f) {
+            if (gravY < 0f ? (p.y + p.r < -4f) : (p.y - p.r > h + 4f)) {
                 respawn(p);
             }
         }

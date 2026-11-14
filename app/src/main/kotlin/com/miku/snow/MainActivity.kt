@@ -269,10 +269,11 @@ private val CHANGELOG = listOf(
     LogEntry(83, "7.15.66", listOf(
         "修复更新浮条被裁：不再用 Miuix Card 包裹，换成圆角自绘容器，按钮完整显示并避开导航条"
     )),
-    LogEntry(83, "7.15.66", listOf(
-        "陀螺仪倾斜改为 0-360 全向：手机转到哪个方向，图片就转到对应角度，不再限 26 度",
-        "手机平放时保持上一角度，不会乱跳；跨越 0/360 按最短路径平滑",
-        "修复更新浮条被裁掉一半（不再用 Card，按钮改成自适应背景 + 留出导航条高度）"
+    LogEntry(84, "7.15.67", listOf(
+        "陀螺仪改成改变飘落方向：按重力方向真正的往左/往右/往上飘，不再只是给图片转角度",
+        "文字和图片一起生效；粒子跟着方向旋转、上下边缘都能正常补粒子",
+        "手机平放时维持上一方向，跨 0/360 走最短路径平滑",
+        "修复更新浮条被裁掉一半（按钮改成自适应背景 + 留出导航条高度）"
     )),
     LogEntry(82, "7.15.65", listOf(
         "新增「陀螺仪倾斜」：飘雪图片跟着手机左右倾斜改变角度，最大 26°，带平滑阻尼",
@@ -1084,7 +1085,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 )
                 SwitchPreference(
                     title = "陀螺仪倾斜",
-                    summary = "图片跟着手机转到对应角度，0-360 全向无死角（只影响图片，文字不变）",
+                    summary = "雪按手机重力方向飘：手机往哪边歪，文字和图片就往哪边落，0-360 全向",
                     checked = gyroTilt,
                     onCheckedChange = {
                         gyroTilt = it
@@ -2001,7 +2002,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.66") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.67") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",

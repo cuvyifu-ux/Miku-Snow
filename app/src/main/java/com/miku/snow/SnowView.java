@@ -81,24 +81,30 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
         public void onSensorChanged(SensorEvent e) {
             float x = e.values[0];
             float y = e.values[1];
-            float z = e.values[2];
-            // 重力在屏幕平面上的投影：手机往哪边倒，图片就往哪边转到那个角度
             float proj = (float) Math.hypot(x, y);
             if (proj < 1.5f) {
-                // 手机几乎平放时没有唯一的「下方」，保持上一帧角度，避免乱跳
+                // 手机几乎平放时没有明确的「下方」，维持上一帧方向
                 return;
             }
-            // atan2 给出 -180..180 的全向角度，不再夹在 ±26 度里
-            float deg = (float) Math.toDegrees(Math.atan2(x, -y));
+            // 把传感器向量换成屏幕坐标下的「下方」单位向量：y 向下为正
+            float nx = -x / proj;
+            float ny = y / proj;
+            if (gyroReverse) {
+                nx = -nx;
+                ny = -ny;
+            }
+            // 角度：0 度 = 往下飘，90 = 往右，180 = 往上，270 = 往左
+            float deg = (float) Math.toDegrees(Math.atan2(nx, ny));
             if (deg < 0f) deg += 360f;
-            if (gyroReverse) deg = (deg + 180f) % 360f;
-            // 按最短路径平滑，跨越 0/360 边界时不会甩一整圈
             float delta = deg - gyroDeg;
             while (delta > 180f) delta -= 360f;
             while (delta < -180f) delta += 360f;
             gyroDeg = gyroDeg + delta * 0.18f;
             if (gyroDeg < 0f) gyroDeg += 360f;
             if (gyroDeg >= 360f) gyroDeg -= 360f;
+            // 引擎按这个方向飘
+            double rad = Math.toRadians(gyroDeg);
+            engine.setGravity((float) Math.sin(rad), (float) Math.cos(rad));
         }
 
         @Override
@@ -111,10 +117,16 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
         gyroReverse = reverse;
         if (!enabled) {
             gyroDeg = 0f;
+            engine.setGravity(0f, 1f);
             unregisterSensor();
         } else if (isAttachedToWindow()) {
             registerSensor();
         }
+    }
+
+    private float gyroWeight() {
+        double rad = Math.toRadians(gyroDeg);
+        return (float) (Math.abs(Math.sin(rad)) + Math.abs(1f - Math.cos(rad)));
     }
 
     private void registerSensor() {
@@ -232,13 +244,13 @@ public final class SnowView extends View implements Choreographer.FrameCallback 
 
             canvas.save();
             canvas.translate(cx, cy);
+            if (gyroEnabled && Math.abs(gyroWeight()) > 0.002f) canvas.rotate(-gyroDeg);
             canvas.rotate(p.rot);
             if (p.skew != 0f) canvas.skew(p.skew, 0f);
 
             if (p.kind == SnowEngine.KIND_IMAGE && p.imageIdx < images.length) {
                 Bitmap bmp = images[p.imageIdx];
                 if (bmp != null && !bmp.isRecycled()) {
-                    if (gyroEnabled && Math.abs(gyroDeg) > 0.1f) canvas.rotate(gyroDeg);
                     canvas.scale(flipScale, 1f);
                     dst.set(-p.r, -p.r, p.r, p.r);
                     imagePaint.setAlpha(alpha);
