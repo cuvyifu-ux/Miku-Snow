@@ -68,6 +68,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.ui.draw.clip
@@ -271,6 +272,11 @@ private data class LogEntry(val code: Int, val version: String, val items: List<
 private val CHANGELOG = listOf(
     LogEntry(83, "7.15.66", listOf(
         "修复更新浮条被裁：不再用 Miuix Card 包裹，换成圆角自绘容器，按钮完整显示并避开导航条"
+    )),
+    LogEntry(90, "7.15.73", listOf(
+        "广告改为公益向：助力宝贝回家海报，「双击打开」改为应用内网页打开，不再跳外部浏览器",
+        "「双击打开」移到屏幕正中，半透明胶囊，带上下浮动动画",
+        "应用内网页带返回按钮，按系统返回键也直接退回应用"
     )),
     LogEntry(89, "7.15.72", listOf(
         "开屏广告倒计时从 3 秒改为 5 秒：跳过 5s → 4 → 3 → 2 → 1 后滑出关闭"
@@ -630,20 +636,6 @@ private fun FoldingTitle(
     }
 }
 
-private fun openAdLink(ctx: android.content.Context) {
-    if (AdLink.isBlank()) {
-        toast(ctx, "广告链接还没配置")
-        return
-    }
-    try {
-        ctx.startActivity(
-            Intent(Intent.ACTION_VIEW, Uri.parse(AdLink)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-    } catch (t: Throwable) {
-        toast(ctx, "打不开浏览器")
-    }
-}
-
 @Composable
 private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit = {}) {
     val ctx = LocalContext.current
@@ -672,6 +664,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var adOn by remember { mutableStateOf(!Prefs.adOff(ctx)) }
     var adLeft by remember { mutableStateOf(5) }
     var adClosing by remember { mutableStateOf(false) }
+    var adWebUrl by remember { mutableStateOf("") }
     val adScreenW = with(LocalDensity.current) {
         LocalConfiguration.current.screenWidthDp.dp.toPx()
     }
@@ -2091,7 +2084,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.72") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.73") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
@@ -2175,7 +2168,8 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 .background(Color(0xFF101012))
                 .graphicsLayer { translationX = adShift * adScreenW }
                 .pointerInput(Unit) { detectTapGestures(onDoubleTap = {
-                    openAdLink(ctx)
+                    // 应用内部打开，不起跳外部浏览器
+                    adWebUrl = AdLink
                     if (!adClosing) adClosing = true
                 }) }
         ) {
@@ -2185,16 +2179,26 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
+            val adFloat = androidx.compose.animation.core.rememberInfiniteTransition(label = "adFloat")
+            val adFloatY by adFloat.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                    animation = androidx.compose.animation.core.tween(1500),
+                    repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                ),
+                label = "adFloatY"
+            )
             Text(
                 text = "双击打开",
                 fontSize = 15.sp,
                 color = Color.White,
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 72.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+                    .align(Alignment.Center)
+                    .offset(y = (adFloatY * 16f - 8f).dp)
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0x99000000))
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .background(Color(0x66000000))
+                    .padding(horizontal = 16.dp, vertical = 7.dp)
             )
             Box(
                 modifier = Modifier
@@ -2214,6 +2218,58 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                     color = Color.White
                 )
             }
+        }
+    }
+
+    // 应用内浏览器：广告双击后在这里打开，不跳外部浏览器
+    if (adWebUrl.isNotEmpty()) {
+        androidx.activity.compose.BackHandler { adWebUrl = "" }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(if (dark) Color(0xFF000000) else Color(0xFFFFFFFF))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+                        start = 12.dp,
+                        end = 12.dp,
+                        bottom = 8.dp
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "← 返回",
+                    fontSize = 15.sp,
+                    color = if (dark) Color.White else Color.Black,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (dark) Color(0xFF262628) else Color(0xFFF1F1F3))
+                        .clickable { adWebUrl = "" }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "宝贝回家",
+                    fontSize = 15.sp,
+                    color = if (dark) Color.White else Color.Black
+                )
+            }
+            androidx.compose.ui.viewinterop.AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { c ->
+                    android.webkit.WebView(c).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.loadWithOverviewMode = true
+                        settings.useWideViewPort = true
+                        webViewClient = android.webkit.WebViewClient()
+                        loadUrl(adWebUrl)
+                    }
+                }
+            )
         }
     }
 
