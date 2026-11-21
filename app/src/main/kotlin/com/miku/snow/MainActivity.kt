@@ -272,13 +272,24 @@ private val CHANGELOG = listOf(
     LogEntry(83, "7.15.66", listOf(
         "修复更新浮条被裁：不再用 Miuix Card 包裹，换成圆角自绘容器，按钮完整显示并避开导航条"
     )),
+    LogEntry(89, "7.15.72", listOf(
+        "开屏广告倒计时从 3 秒改为 5 秒：跳过 5s → 4 → 3 → 2 → 1 后滑出关闭"
+    )),
+    LogEntry(89, "7.15.72", listOf(
+        "开屏广告时长延长到 5 秒：右上角从「跳过 5s」开始倒计时",
+        "广告页细节微调：跳转后立即滑出，跳过按钮与「双击打开」位置避开状态栏"
+    )),
+    LogEntry(89, "7.15.72", listOf(
+        "开屏广告倒计时延长到 5 秒（右上角 5→4→3→2→1 后可跳过）",
+        "移除启动后自动弹出的更新日志，改为只在关于页手动查看"
+    )),
     LogEntry(88, "7.15.71", listOf(
         "开屏广告换成真实封面图（宝贝回家公益海报），铺满全屏",
         "封面上方新增「双击打开」，双击跳转 baobeihuijia.com 并关闭广告",
         "跳过与倒计时结束改成从左往右滑出的关闭动画，滑完整个广告层一起移除"
     )),
     LogEntry(87, "7.15.70", listOf(
-        "新增开屏广告：启动先盖一层广告页，右上角「跳过 3s」倒计时 3→2→1，到点或点跳过整块消失",
+        "新增开屏广告：启动先盖一层广告页，右上角「跳过 5s」倒计时 5→1，到点或点跳过整块消失",
         "广告页支持双击打开链接（链接与素材待定，现为空壳）",
         "设置页新增「关闭广告」开关，关掉后启动不再显示"
     )),
@@ -659,7 +670,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var barBlur by remember { mutableStateOf(Prefs.barBlur(ctx)) }
     var adOff by remember { mutableStateOf(Prefs.adOff(ctx)) }
     var adOn by remember { mutableStateOf(!Prefs.adOff(ctx)) }
-    var adLeft by remember { mutableStateOf(3) }
+    var adLeft by remember { mutableStateOf(5) }
     var adClosing by remember { mutableStateOf(false) }
     val adScreenW = with(LocalDensity.current) {
         LocalConfiguration.current.screenWidthDp.dp.toPx()
@@ -675,7 +686,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     }
     LaunchedEffect(adOn) {
         if (!adOn) return@LaunchedEffect
-        adLeft = 3
+        adLeft = 5
         while (adLeft > 0) {
             delay(1000)
             adLeft -= 1
@@ -687,13 +698,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var predictBack by remember { mutableStateOf(Prefs.predictBack(ctx)) }
     var uiScale by remember { mutableStateOf(Prefs.uiScale(ctx)) }
     var editKind by remember { mutableStateOf(0) }   // 1 数量 2 速度 3 大小 4 缩放
-    LaunchedEffect(Unit) {
-        val seen = Prefs.seenLog(ctx)
-        if (CHANGELOG.any { it.code > seen }) {
-            logOnlyNew = true
-            showLog = true
-        }
-    }
+    // 启动不再自动弹更新日志，需要看的话去关于页手动打开
     var running by remember { mutableStateOf(Prefs.running(ctx)) }
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(ctx)) }
     var themeMode by remember { mutableStateOf(Prefs.themeMode(ctx)) }
@@ -2086,7 +2091,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.71") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.72") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
