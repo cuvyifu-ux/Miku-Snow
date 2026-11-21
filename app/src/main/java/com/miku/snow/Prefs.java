@@ -156,6 +156,10 @@ public final class Prefs {
     }
 
     /** 顶栏毛玻璃开关 */
+    // 开屏广告开关：默认开着，关掉后启动不再显示
+    public static boolean adOff(Context c) { return sp(c).getBoolean("ad_off", false); }
+    public static void setAdOff(Context c, boolean v) { sp(c).edit().putBoolean("ad_off", v).apply(); }
+
     public static boolean barBlur(Context c) {
         return sp(c).getBoolean("bar_blur", true);
     }

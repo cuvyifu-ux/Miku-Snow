@@ -20,6 +20,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -262,12 +263,19 @@ private fun MainActivity.showCrashScreen(trace: String) {
 // LocalNavigationEventDispatcherOwner（activity-compose 1.11 没提供），一显示就崩。
 // 这里用 Miuix 的 Card / TextButton 自绘一个同款底部/居中弹窗，外观一致且不挑宿主。
 private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
+// 开屏广告的目标网址，等广告素材定下来再填；空着时双击只提示
+private const val AdLink = ""
 
 private data class LogEntry(val code: Int, val version: String, val items: List<String>)
 
 private val CHANGELOG = listOf(
     LogEntry(83, "7.15.66", listOf(
         "修复更新浮条被裁：不再用 Miuix Card 包裹，换成圆角自绘容器，按钮完整显示并避开导航条"
+    )),
+    LogEntry(87, "7.15.70", listOf(
+        "新增开屏广告：启动先盖一层广告页，右上角「跳过 3s」倒计时 3→2→1，到点或点跳过整块消失",
+        "广告页支持双击打开链接（链接与素材待定，现为空壳）",
+        "设置页新增「关闭广告」开关，关掉后启动不再显示"
     )),
     LogEntry(86, "7.15.69", listOf(
         "陀螺仪飘雪去掉屏幕边界限制：飘出去就在上风处补进来，不再贴边堆积后往下掉",
@@ -606,6 +614,20 @@ private fun FoldingTitle(
     }
 }
 
+private fun openAdLink(ctx: android.content.Context) {
+    if (AdLink.isBlank()) {
+        toast(ctx, "广告链接还没配置")
+        return
+    }
+    try {
+        ctx.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(AdLink)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    } catch (t: Throwable) {
+        toast(ctx, "打不开浏览器")
+    }
+}
+
 @Composable
 private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit = {}) {
     val ctx = LocalContext.current
@@ -630,6 +652,18 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var logOnlyNew by remember { mutableStateOf(false) }
     var blurTitle by remember { mutableStateOf(Prefs.blurTitle(ctx)) }
     var barBlur by remember { mutableStateOf(Prefs.barBlur(ctx)) }
+    var adOff by remember { mutableStateOf(Prefs.adOff(ctx)) }
+    var adOn by remember { mutableStateOf(!Prefs.adOff(ctx)) }
+    var adLeft by remember { mutableStateOf(3) }
+    LaunchedEffect(adOn) {
+        if (!adOn) return@LaunchedEffect
+        adLeft = 3
+        while (adLeft > 0) {
+            delay(1000)
+            adLeft -= 1
+        }
+        adOn = false
+    }
     var gyroTilt by remember { mutableStateOf(Prefs.gyroTilt(ctx)) }
     var gyroReverse by remember { mutableStateOf(Prefs.gyroReverse(ctx)) }
     var predictBack by remember { mutableStateOf(Prefs.predictBack(ctx)) }
@@ -1857,6 +1891,22 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                                 .background(if (dark) Color(0xFF262626) else Color(0xFFEDEDED))
                         )
                         SwitchPreference(
+                            title = "关闭广告",
+                            summary = "关掉后启动不再显示开屏广告",
+                            checked = adOff,
+                            onCheckedChange = {
+                                adOff = it
+                                Prefs.setAdOff(ctx, it)
+                                if (it) adOn = false
+                            }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(if (dark) Color(0xFF262626) else Color(0xFFEDEDED))
+                        )
+                        SwitchPreference(
                             title = "预测性返回手势",
                             summary = "在主题页、关于页做返回手势时退回主页，而不是退出应用",
                             checked = predictBack,
@@ -2015,7 +2065,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.69") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.70") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
@@ -2089,6 +2139,51 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
             )
         }
     }
+    }
+
+    // 开屏广告：整层覆盖，倒计时结束或点跳过就整块消失
+    if (adOn) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF101012))
+                .pointerInput(Unit) { detectTapGestures(onDoubleTap = { openAdLink(ctx) }) }
+        ) {
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(Color(0xFF2B2B30)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "广告", fontSize = 22.sp, color = Color(0xFF9A9AA2))
+                }
+                Spacer(Modifier.height(18.dp))
+                Text(text = "双击打开", fontSize = 15.sp, color = Color.White)
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(
+                        top = 12.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+                        end = 16.dp
+                    )
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0x55000000))
+                    .clickable { adOn = false }
+                    .padding(horizontal = 14.dp, vertical = 7.dp)
+            ) {
+                Text(
+                    text = if (adLeft > 0) "跳过 ${adLeft}s" else "跳过",
+                    fontSize = 13.sp,
+                    color = Color.White
+                )
+            }
+        }
     }
 
     // 首次进入的提醒
