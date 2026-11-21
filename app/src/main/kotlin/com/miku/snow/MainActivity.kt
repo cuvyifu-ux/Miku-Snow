@@ -264,13 +264,18 @@ private fun MainActivity.showCrashScreen(trace: String) {
 // 这里用 Miuix 的 Card / TextButton 自绘一个同款底部/居中弹窗，外观一致且不挑宿主。
 private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
 // 开屏广告的目标网址，等广告素材定下来再填；空着时双击只提示
-private const val AdLink = ""
+private const val AdLink = "https://www.baobeihuijia.com/bbhj/"
 
 private data class LogEntry(val code: Int, val version: String, val items: List<String>)
 
 private val CHANGELOG = listOf(
     LogEntry(83, "7.15.66", listOf(
         "修复更新浮条被裁：不再用 Miuix Card 包裹，换成圆角自绘容器，按钮完整显示并避开导航条"
+    )),
+    LogEntry(88, "7.15.71", listOf(
+        "开屏广告换成真实封面图（宝贝回家公益海报），铺满全屏",
+        "封面上方新增「双击打开」，双击跳转 baobeihuijia.com 并关闭广告",
+        "跳过与倒计时结束改成从左往右滑出的关闭动画，滑完整个广告层一起移除"
     )),
     LogEntry(87, "7.15.70", listOf(
         "新增开屏广告：启动先盖一层广告页，右上角「跳过 3s」倒计时 3→2→1，到点或点跳过整块消失",
@@ -655,6 +660,19 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var adOff by remember { mutableStateOf(Prefs.adOff(ctx)) }
     var adOn by remember { mutableStateOf(!Prefs.adOff(ctx)) }
     var adLeft by remember { mutableStateOf(3) }
+    var adClosing by remember { mutableStateOf(false) }
+    val adScreenW = with(LocalDensity.current) {
+        LocalConfiguration.current.screenWidthDp.dp.toPx()
+    }
+    // 关闭时整块广告从左往右滑出去
+    val adShift by animateFloatAsState(
+        targetValue = if (adClosing) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(260),
+        label = "adShift"
+    )
+    LaunchedEffect(adShift, adClosing) {
+        if (adClosing && adShift > 0.98f) adOn = false
+    }
     LaunchedEffect(adOn) {
         if (!adOn) return@LaunchedEffect
         adLeft = 3
@@ -662,7 +680,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
             delay(1000)
             adLeft -= 1
         }
-        adOn = false
+        if (!adClosing) adClosing = true
     }
     var gyroTilt by remember { mutableStateOf(Prefs.gyroTilt(ctx)) }
     var gyroReverse by remember { mutableStateOf(Prefs.gyroReverse(ctx)) }
@@ -1897,7 +1915,10 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                             onCheckedChange = {
                                 adOff = it
                                 Prefs.setAdOff(ctx, it)
-                                if (it) adOn = false
+                                if (it) {
+                                    adClosing = false
+                                    adOn = false
+                                }
                             }
                         )
                         Box(
@@ -2065,7 +2086,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.70") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.71") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
@@ -2141,30 +2162,35 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     }
     }
 
-    // 开屏广告：整层覆盖，倒计时结束或点跳过就整块消失
+    // 开屏广告：整层覆盖，倒计时结束或点跳过就整块往右滑走
     if (adOn) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFF101012))
-                .pointerInput(Unit) { detectTapGestures(onDoubleTap = { openAdLink(ctx) }) }
+                .graphicsLayer { translationX = adShift * adScreenW }
+                .pointerInput(Unit) { detectTapGestures(onDoubleTap = {
+                    openAdLink(ctx)
+                    if (!adClosing) adClosing = true
+                }) }
         ) {
-            Column(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(Color(0xFF2B2B30)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = "广告", fontSize = 22.sp, color = Color(0xFF9A9AA2))
-                }
-                Spacer(Modifier.height(18.dp))
-                Text(text = "双击打开", fontSize = 15.sp, color = Color.White)
-            }
+            Image(
+                painter = painterResource(R.drawable.ad_cover),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Text(
+                text = "双击打开",
+                fontSize = 15.sp,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 72.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0x99000000))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            )
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -2173,8 +2199,8 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                         end = 16.dp
                     )
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0x55000000))
-                    .clickable { adOn = false }
+                    .background(Color(0x66000000))
+                    .clickable { if (!adClosing) adClosing = true }
                     .padding(horizontal = 14.dp, vertical = 7.dp)
             ) {
                 Text(
