@@ -264,14 +264,25 @@ private fun MainActivity.showCrashScreen(trace: String) {
 // LocalNavigationEventDispatcherOwner（activity-compose 1.11 没提供），一显示就崩。
 // 这里用 Miuix 的 Card / TextButton 自绘一个同款底部/居中弹窗，外观一致且不挑宿主。
 private const val GitHubUrl = "https://github.com/cuvyifu-ux/Miku-Snow"
-// 开屏广告的目标网址，等广告素材定下来再填；空着时双击只提示
-private const val AdLink = "https://www.baobeihuijia.com/bbhj/"
+// 四条公益广告：随机挑一条，双击在应用内打开对应网址
+private data class AdItem(val res: Int, val url: String, val title: String)
+private val AdItems = listOf(
+    AdItem(R.drawable.ad_1, "https://www.baobeihuijia.com/bbhj/", "宝贝回家"),
+    AdItem(R.drawable.ad_2, "https://fzapph5.gjfzpt.cn/", "国家反诈中心"),
+    AdItem(R.drawable.ad_3, "https://www.chinaaids.cn/", "防艾宣传"),
+    AdItem(R.drawable.ad_4, "https://www.mee.gov.cn/", "保护海洋")
+)
 
 private data class LogEntry(val code: Int, val version: String, val items: List<String>)
 
 private val CHANGELOG = listOf(
     LogEntry(83, "7.15.66", listOf(
         "修复更新浮条被裁：不再用 Miuix Card 包裹，换成圆角自绘容器，按钮完整显示并避开导航条"
+    )),
+    LogEntry(92, "7.15.75", listOf(
+        "新增三条公益广告（反诈、防艾、海洋塑料），共四条随机播放",
+        "每条广告配了对应官方网址：反诈 gjfzpt.cn、防艾 chinaaids.cn、海洋 mee.gov.cn、寻亲 baobeihuijia.com",
+        "双击依然在应用内打开网页，标题跟随当前广告更换"
     )),
     LogEntry(91, "7.15.74", listOf(
         "公益海报换成「守护团圆 助力宝贝回家」插画版，1080 宽 WebP 压缩后铺满全屏"
@@ -668,6 +679,9 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var adLeft by remember { mutableStateOf(5) }
     var adClosing by remember { mutableStateOf(false) }
     var adWebUrl by remember { mutableStateOf("") }
+    var adTitle by remember { mutableStateOf("") }
+    // 每次启动随机挑一条广告
+    var adIdx by remember { mutableStateOf((0 until AdItems.size).random()) }
     val adScreenW = with(LocalDensity.current) {
         LocalConfiguration.current.screenWidthDp.dp.toPx()
     }
@@ -2087,7 +2101,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.74") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.75") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
@@ -2172,12 +2186,13 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 .graphicsLayer { translationX = adShift * adScreenW }
                 .pointerInput(Unit) { detectTapGestures(onDoubleTap = {
                     // 应用内部打开，不起跳外部浏览器
-                    adWebUrl = AdLink
+                    adWebUrl = AdItems[adIdx].url
+                    adTitle = AdItems[adIdx].title
                     if (!adClosing) adClosing = true
                 }) }
         ) {
             Image(
-                painter = painterResource(R.drawable.ad_cover),
+                painter = painterResource(AdItems[adIdx].res),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -2255,7 +2270,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "宝贝回家",
+                    text = if (adTitle.isNotEmpty()) adTitle else "公益广告",
                     fontSize = 15.sp,
                     color = if (dark) Color.White else Color.Black
                 )
