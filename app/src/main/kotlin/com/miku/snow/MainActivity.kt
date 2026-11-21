@@ -273,6 +273,9 @@ private val CHANGELOG = listOf(
     LogEntry(83, "7.15.66", listOf(
         "修复更新浮条被裁：不再用 Miuix Card 包裹，换成圆角自绘容器，按钮完整显示并避开导航条"
     )),
+    LogEntry(91, "7.15.74", listOf(
+        "公益海报换成「守护团圆 助力宝贝回家」插画版，1080 宽 WebP 压缩后铺满全屏"
+    )),
     LogEntry(90, "7.15.73", listOf(
         "广告改为公益向：助力宝贝回家海报，「双击打开」改为应用内网页打开，不再跳外部浏览器",
         "「双击打开」移到屏幕正中，半透明胶囊，带上下浮动动画",
@@ -2084,7 +2087,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
 
                 Card(insideMargin = PaddingValues(0.dp)) {
                     BasicComponent(title = "创作者", endActions = { Text("du|壹玖") })
-                    BasicComponent(title = "版本", endActions = { Text("7.15.73") })
+                    BasicComponent(title = "版本", endActions = { Text("7.15.74") })
                     BasicComponent(
                         title = "开源页",
                         summary = "当前项目已经开源，点击用默认浏览器打开 GitHub 页",
