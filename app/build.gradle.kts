@@ -8,7 +8,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.miku.snow"
+        applicationId = "com.miku.snow.pure"
         minSdk = 26
         targetSdk = 33
         versionCode = 92

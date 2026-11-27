@@ -675,7 +675,7 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
     var blurTitle by remember { mutableStateOf(Prefs.blurTitle(ctx)) }
     var barBlur by remember { mutableStateOf(Prefs.barBlur(ctx)) }
     var adOff by remember { mutableStateOf(Prefs.adOff(ctx)) }
-    var adOn by remember { mutableStateOf(!Prefs.adOff(ctx)) }
+    var adOn by remember { mutableStateOf(false) }
     var adLeft by remember { mutableStateOf(5) }
     var adClosing by remember { mutableStateOf(false) }
     var adWebUrl by remember { mutableStateOf("") }
@@ -1924,25 +1924,6 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
                                 .background(if (dark) Color(0xFF262626) else Color(0xFFEDEDED))
                         )
                         SwitchPreference(
-                            title = "关闭广告",
-                            summary = "关掉后启动不再显示开屏广告",
-                            checked = adOff,
-                            onCheckedChange = {
-                                adOff = it
-                                Prefs.setAdOff(ctx, it)
-                                if (it) {
-                                    adClosing = false
-                                    adOn = false
-                                }
-                            }
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(if (dark) Color(0xFF262626) else Color(0xFFEDEDED))
-                        )
-                        SwitchPreference(
                             title = "预测性返回手势",
                             summary = "在主题页、关于页做返回手势时退回主页，而不是退出应用",
                             checked = predictBack,
@@ -2175,120 +2156,6 @@ private fun Screen(onModeChanged: (Int) -> Unit, onScaleChanged: (Int) -> Unit =
             )
         }
     }
-    }
-
-    // 开屏广告：整层覆盖，倒计时结束或点跳过就整块往右滑走
-    if (adOn) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFF101012))
-                .graphicsLayer { translationX = adShift * adScreenW }
-                .pointerInput(Unit) { detectTapGestures(onDoubleTap = {
-                    // 应用内部打开，不起跳外部浏览器
-                    adWebUrl = AdItems[adIdx].url
-                    adTitle = AdItems[adIdx].title
-                    if (!adClosing) adClosing = true
-                }) }
-        ) {
-            Image(
-                painter = painterResource(AdItems[adIdx].res),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            val adFloat = androidx.compose.animation.core.rememberInfiniteTransition(label = "adFloat")
-            val adFloatY by adFloat.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                    animation = androidx.compose.animation.core.tween(1500),
-                    repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-                ),
-                label = "adFloatY"
-            )
-            Text(
-                text = "双击打开",
-                fontSize = 15.sp,
-                color = Color.White,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(y = (adFloatY * 16f - 8f).dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0x66000000))
-                    .padding(horizontal = 16.dp, vertical = 7.dp)
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(
-                        top = 12.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
-                        end = 16.dp
-                    )
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0x66000000))
-                    .clickable { if (!adClosing) adClosing = true }
-                    .padding(horizontal = 14.dp, vertical = 7.dp)
-            ) {
-                Text(
-                    text = if (adLeft > 0) "跳过 ${adLeft}s" else "跳过",
-                    fontSize = 13.sp,
-                    color = Color.White
-                )
-            }
-        }
-    }
-
-    // 应用内浏览器：广告双击后在这里打开，不跳外部浏览器
-    if (adWebUrl.isNotEmpty()) {
-        androidx.activity.compose.BackHandler { adWebUrl = "" }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(if (dark) Color(0xFF000000) else Color(0xFFFFFFFF))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
-                        start = 12.dp,
-                        end = 12.dp,
-                        bottom = 8.dp
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "← 返回",
-                    fontSize = 15.sp,
-                    color = if (dark) Color.White else Color.Black,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(if (dark) Color(0xFF262628) else Color(0xFFF1F1F3))
-                        .clickable { adWebUrl = "" }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = if (adTitle.isNotEmpty()) adTitle else "公益广告",
-                    fontSize = 15.sp,
-                    color = if (dark) Color.White else Color.Black
-                )
-            }
-            androidx.compose.ui.viewinterop.AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { c ->
-                    android.webkit.WebView(c).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.loadWithOverviewMode = true
-                        settings.useWideViewPort = true
-                        webViewClient = android.webkit.WebViewClient()
-                        loadUrl(adWebUrl)
-                    }
-                }
-            )
-        }
     }
 
     // 首次进入的提醒
